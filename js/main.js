@@ -1,0 +1,2 @@
+
+const graph = new Graph();
