@@ -39,3 +39,5 @@ function dijkstra(graph, startId) {
 
     return steps;
 }
+
+module.exports = { dijkstra };
