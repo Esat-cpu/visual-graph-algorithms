@@ -3,10 +3,13 @@
 
 function dijkstra(graph, startId) {
     const steps = [];
+    const parents = {};
 
     const distance = {};
     const visited = {};
     const remaining = new Set(graph.nodes.map(n => n.id));
+
+    graph.nodes.forEach(n => parents[n.id] = null);
 
     graph.nodes.forEach(n => distance[n.id] = Infinity);
     distance[startId] = 0;
@@ -30,14 +33,16 @@ function dijkstra(graph, startId) {
             const edge = graph.edgeBetween(neighbourId, current);
             const newDist = edge.weight + distance[current];
 
-            if (newDist < distance[neighbourId])
+            if (newDist < distance[neighbourId]) {
                 distance[neighbourId] = newDist;
+                parents[neighbourId] = current;
+            }
         });
 
         steps.push({ current, distance: {...distance}, visited: {...visited} });
     }
 
-    return steps;
+    return { steps, parents };
 }
 
 module.exports = { dijkstra };

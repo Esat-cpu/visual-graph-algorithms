@@ -19,7 +19,7 @@ function test_1() {
     graph.addEdge(2, 3, 5);
     graph.addEdge(1, 3, 1);
 
-    const steps = dijkstra(graph, 0);
+    const steps = dijkstra(graph, 0).steps;
     const lastDistList = steps[steps.length - 1].distance;
 
     assert(lastDistList[0] === 0, "Start Node");
