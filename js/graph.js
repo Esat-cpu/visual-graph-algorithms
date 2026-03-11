@@ -3,9 +3,9 @@
 
 class Graph {
     constructor() {
-        let nodes = [];
-        let edges = [];
-        let nodeIdCounter = 0;
+        this.nodes = [];
+        this.edges = [];
+        this.nodeIdCounter = 0;
     }
 
     // Add a node with given coordinates
@@ -26,10 +26,18 @@ class Graph {
         );
     }
 
-    // Get a node's neighbours
+    // Get a node's neighbours ID list
     getNeighbours(nodeId) {
-        return edges
-            .filter(e => e.source == nodeId || e.target == nodeId)
-            .map(e => (nodeId == e.source) ? e.target : e.source);
+        return nodes
+            .filter(n => this.hasEdge(nodeId, n.id))
+            .map(n => n.id);
+    }
+
+    // Get the edge between two nodes
+    edgeBetween(nodeId1, nodeId2) {
+        return edges.find(e =>
+            (e.source == nodeId1 && e.target == nodeId2) ||
+            (e.source == nodeId2 && e.target == nodeId1)
+        );
     }
 }
