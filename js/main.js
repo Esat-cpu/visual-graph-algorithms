@@ -106,11 +106,24 @@ const drag = d3.drag()
     .on("start", function() {})
     .on("drag", function(event, d) {
         if (locked) return;
+        const tooClose = graph.nodes.some(n => {
+            if (n.id === d.id) return false;
+            const dx = n.x - event.x;
+            const dy = n.y - event.y;
+            return Math.sqrt(dx*dx + dy*dy) < MIN_DISTANCE;
+        });
+        if (tooClose) {
+            d3.select(this).select("circle").attr("fill", "#ef4444");
+            return;
+        }
+        d3.select(this).select("circle").attr("fill", "#3b82f6");
         d.x = event.x;
         d.y = event.y;
         render();
     })
-    .on("end", function() {});
+    .on("end", function() {
+        d3.select(this).select("circle").attr("fill", "#3b82f6");
+    });
 
 
 d3.select("#graph-container")
@@ -208,6 +221,33 @@ document.getElementById("weight-cancel").addEventListener("click", hideWeightMod
 document.getElementById("weight-input").addEventListener("keydown", e => {
     if (e.key === "Enter") document.getElementById("weight-confirm").click();
     if (e.key === "Escape") hideWeightModal();
+});
+
+
+
+// ── ALGO BUTTONS ──
+let activeAlgo = "dijkstra";
+
+document.querySelectorAll(".algo-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+        const algo = btn.dataset.algo;
+        if (algo === activeAlgo) return;
+
+        activeAlgo = algo;
+
+        document.querySelectorAll(".algo-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+
+        document.getElementById("active-algo-label").textContent = btn.textContent;
+
+        const startGroup = document.getElementById("start-node-group");
+        const startDivider = document.getElementById("start-divider");
+        if (algo === "kruskal") {
+            startGroup.classList.add("hidden");
+        } else {
+            startGroup.classList.remove("hidden");
+        }
+    });
 });
 
 // Prevent context menu on right click

@@ -73,7 +73,10 @@ body {
 }
 
 .algo-btn:first-of-type { border-radius: 4px 0 0 4px; }
-.algo-btn:last-of-type  { border-radius: 0 4px 4px 0; border-right: 1px solid var(--border); }
+.algo-btn[data-algo="kruskal"] {
+    border-right: 1px solid var(--border);
+    border-radius: 0 4px 4px 0;
+}
 
 .algo-btn:hover {
     background: var(--bg-panel);
@@ -445,4 +448,10 @@ body {
 
 #graph-svg {
     user-select: none;
+}
+
+.hidden {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
 }
