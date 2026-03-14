@@ -19,10 +19,10 @@ class Graph {
     }
 
     // Check if two nodes are neighbours
-    hasEdge (sourceId, targetId) {
+    hasEdge(sourceId, targetId) {
         return this.edges.some(e =>
-            (e.source == sourceId && e.target == targetId) ||
-            (e.source == targetId) && (e.target == sourceId)
+            (e.source === sourceId && e.target === targetId) ||
+            (e.source === targetId) && (e.target === sourceId)
         );
     }
 
@@ -41,16 +41,9 @@ class Graph {
         );
     }
 
-    // Get the edges connected to a node
-    getEdges(nodeId) {
-        return this.edges.filter(e =>
-            (e.source == nodeId || e.target == nodeId)
-        );
-    }
-
     // Get node by ID
     getNode(id) {
-        this.nodes.find(n => (n.id === id));
+        return this.nodes.find(n => (n.id === id));
     }
 }
 
