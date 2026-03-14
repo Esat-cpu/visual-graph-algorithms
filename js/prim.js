@@ -16,6 +16,7 @@ function prim(graph, startId) {
         const edges = graph.edges
             .filter(e => (visited.has(e.source) ^ visited.has(e.target)));
         const min_w_edge = find_min(edges);
+        if (!min_w_edge) break;
 
         current = visited.has(min_w_edge.source) ? min_w_edge.target : min_w_edge.source;
         visited.add(current);

@@ -455,3 +455,15 @@ body {
     visibility: hidden !important;
     pointer-events: none !important;
 }
+
+
+.edge-active line {
+    stroke: #22c55e;
+    stroke-width: 3;
+    filter: drop-shadow(0 0 6px #22c55e);
+}
+
+.edge-active .edge-weight {
+    fill: #93c5fd;
+    filter: drop-shadow(0 0 8px #0061fd) drop-shadow(0 0 4px #fff);
+}

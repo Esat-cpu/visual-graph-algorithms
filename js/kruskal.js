@@ -17,7 +17,7 @@ function kruskal(graph) {
             mst.push(e);
         }
 
-        steps.push({ current: e });
+        steps.push({ current: e, mst: [...mst] });
     });
 
     return { steps, mst };
