@@ -40,6 +40,13 @@ class Graph {
             (e.source == nodeId2 && e.target == nodeId1)
         );
     }
+
+    // Get the edges connected to a node
+    getEdges(nodeId) {
+        return this.edges.filter(e =>
+            (e.source == nodeId || e.target == nodeId)
+        );
+    }
 }
 
 module.exports = { Graph };
