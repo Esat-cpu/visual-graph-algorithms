@@ -40,4 +40,4 @@ function find_min(list_of_edges) {
 }
 
 
-module.exports = { prim };
+if (typeof module !== 'undefined') module.exports = { prim };

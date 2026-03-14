@@ -40,5 +40,5 @@ function bellman_ford(graph, startId) {
     return { steps, parents };
 }
 
-module.exports = { bellman_ford };
+if (typeof module !== 'undefined') module.exports = { bellman_ford };
 

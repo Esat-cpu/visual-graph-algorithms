@@ -45,4 +45,4 @@ function dijkstra(graph, startId) {
     return { steps, parents };
 }
 
-module.exports = { dijkstra };
+if (typeof module !== 'undefined') module.exports = { dijkstra };

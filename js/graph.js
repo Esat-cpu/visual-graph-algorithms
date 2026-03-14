@@ -47,6 +47,11 @@ class Graph {
             (e.source == nodeId || e.target == nodeId)
         );
     }
+
+    // Get node by ID
+    getNode(id) {
+        this.nodes.find(n => (n.id === id));
+    }
 }
 
-module.exports = { Graph };
+if (typeof module !== 'undefined') module.exports = { Graph };

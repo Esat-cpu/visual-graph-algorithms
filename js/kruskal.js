@@ -37,4 +37,4 @@ function union(id1, id2, parent) {
 }
 
 
-module.exports = { kruskal };
+if (typeof module !== 'undefined') module.exports = { kruskal };
