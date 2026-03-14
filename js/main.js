@@ -28,6 +28,20 @@ function isTooClose(x, y) {
 }
 
 
+function isConnected() {
+    if (graph.nodes.length === 0) return true;
+    const visited = new Set();
+    const queue = [graph.nodes[0].id];
+    while (queue.length > 0) {
+        const id = queue.shift();
+        if (visited.has(id)) continue;
+        visited.add(id);
+        graph.getNeighbours(id).forEach(n => queue.push(n));
+    }
+    return visited.size === graph.nodes.length;
+}
+
+
 function resetVisuals() {
     currentParents = null;
     nodesLayer.selectAll(".node").select("circle").attr("fill", "#3b82f6");
@@ -275,6 +289,20 @@ document.querySelectorAll(".algo-btn").forEach(btn => {
 document.getElementById("run-btn").addEventListener("click", () => {
     if (graph.nodes.length === 0) return;
     resetVisuals();
+
+    if (activeAlgo === "prim" || activeAlgo === "kruskal") {
+        if (!isConnected()) {
+            const statusEl = document.querySelector(".status-item:last-child");
+            const original = statusEl.textContent;
+            statusEl.textContent = "⚠ Graph is not connected — Prim and Kruskal require a connected graph";
+            statusEl.style.color = "#ef4444";
+            setTimeout(() => {
+                statusEl.textContent = original;
+                statusEl.style.color = "";
+            }, 3000);
+            return;
+        }
+    }
 
     if (activeAlgo !== "kruskal") {
         const startId = parseInt(document.getElementById("start-node-input").value);
