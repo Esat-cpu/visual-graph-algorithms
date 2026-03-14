@@ -14,6 +14,8 @@ function dijkstra(graph, startId) {
     graph.nodes.forEach(n => distance[n.id] = Infinity);
     distance[startId] = 0;
 
+    steps.push({ current: null, distance: {...distance}, visited: {...visited} });
+
 
     while (remaining.size > 0) {
         let current = null;

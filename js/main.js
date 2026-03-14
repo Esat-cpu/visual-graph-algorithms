@@ -11,6 +11,7 @@ let pendingEdge = null;
 let dragStartX = 0;
 let dragStartY = 0;
 let currentInterval = null;
+let currentParents = null;
 
 const NODE_SIZE = 24;
 const MIN_DISTANCE = 75;
@@ -28,6 +29,7 @@ function isTooClose(x, y) {
 
 
 function resetVisuals() {
+    currentParents = null;
     nodesLayer.selectAll(".node").select("circle").attr("fill", "#3b82f6");
     edgesLayer.selectAll(".edge").classed("edge-active", false);
     edgesLayer.selectAll(".edge").select("line").attr("stroke", "#666666").attr("stroke-width", 2);
@@ -286,10 +288,10 @@ document.getElementById("run-btn").addEventListener("click", () => {
 
         if (activeAlgo === "dijkstra") {
             const { steps, parents } = dijkstra(graph, startId);
-            animate(steps, parents);
+            animateDijkstra(steps, parents);
         } else if (activeAlgo === "bellman-ford") {
             const { steps, parents } = bellman_ford(graph, startId);
-            animate(steps, parents);
+            animateBellmanFord(steps, parents);
         } else if (activeAlgo === "prim") {
             const { steps, mst } = prim(graph, startId);
             animatePrim(steps, mst);
@@ -323,8 +325,8 @@ function stopLock() {
     document.getElementById("graph-container").classList.remove("locked");
 }
 
-// ── ANIMATE (Dijkstra / Bellman-Ford) ──
-function animate(steps, parents) {
+// ── ANIMATE Dijkstra ──
+function animateDijkstra(steps, parents) {
     stopAnimation();
     startLock();
 
@@ -334,12 +336,24 @@ function animate(steps, parents) {
             clearInterval(currentInterval);
             currentInterval = null;
             nodesLayer.selectAll(".node").select("circle").attr("fill", "#3b82f6");
+            edgesLayer.selectAll(".edge").select("line").attr("stroke", "#666666").attr("stroke-width", 2);
+            currentParents = parents;
             stopLock();
             showShortestPathResult(steps[steps.length - 1].distance, parents);
             return;
         }
 
         const step = steps[i];
+
+        edgesLayer.selectAll(".edge")
+            .select("line")
+            .attr("stroke", e =>
+                (e.source === step.current || e.target === step.current) ? "#bc5dcb" : "#666666"
+            )
+            .attr("stroke-width", e =>
+                (e.source === step.current || e.target === step.current) ? 3 : 2
+            );
+
         nodesLayer.selectAll(".node")
             .select("circle")
             .attr("fill", n => {
@@ -347,8 +361,54 @@ function animate(steps, parents) {
                 if (step.visited[n.id]) return "#f59e0b";
                 return "#3b82f6";
             });
+        showShortestPathResult(step.distance, parents);
         i++;
-    }, 1000);
+    }, 1420);
+}
+
+
+
+// ── ANIMATE BELLMAN-FORD ──
+function animateBellmanFord(steps, parents) {
+    stopAnimation();
+    startLock();
+
+    let i = 0;
+    currentInterval = setInterval(() => {
+        if (i >= steps.length) {
+            clearInterval(currentInterval);
+            currentInterval = null;
+            edgesLayer.selectAll(".edge").select("line").attr("stroke", "#666666");
+            nodesLayer.selectAll(".node").select("circle").attr("fill", "#3b82f6");
+            currentParents = parents;
+            stopLock();
+            showShortestPathResult(steps[steps.length - 1].distance, parents);
+            return;
+        }
+
+        const step = steps[i];
+
+        if (!step.current) {
+            showShortestPathResult(step.distance, parents);
+            i++;
+            return;
+        }
+
+        // Reset edges
+        edgesLayer.selectAll(".edge").select("line").attr("stroke", "#666666").attr("stroke-width", 2);
+
+        // Current edge — sarı
+        edgesLayer.selectAll(".edge")
+            .filter(e => e.source === step.current.source && e.target === step.current.target)
+            .select("line")
+            .attr("stroke", "#f59e0b")
+            .attr("stroke-width", 3);
+
+        // Update output
+        showShortestPathResult(step.distance, parents);
+
+        i++;
+    }, 1200);
 }
 
 
@@ -433,9 +493,47 @@ function animateKruskal(steps, mst) {
 }
 
 
+function highlightPath(targetId) {
+    if (!currentParents) return;
+    const savedParents = currentParents;
+    resetVisuals();
+    currentParents = savedParents;
+
+    const path = [];
+    let current = targetId;
+    while (current !== null && current !== undefined && current !== -1) {
+        path.push(current);
+        current = currentParents[current];
+    }
+
+    nodesLayer.selectAll(".node")
+        .select("circle")
+        .attr("fill", n => path.includes(n.id) ? "#10b981" : "#3b82f6");
+
+    edgesLayer.selectAll(".edge")
+        .classed("edge-active", e => {
+            for (let i = 0; i < path.length - 1; i++) {
+                if ((e.source === path[i] && e.target === path[i+1]) ||
+                    (e.source === path[i+1] && e.target === path[i]))
+                    return true;
+            }
+            return false;
+        });
+}
+
+
 // ── RESULTS ──
 function showShortestPathResult(distance, parents) {
     const content = document.getElementById("result-content");
+
+    // Save previous values before clearing
+    const prevValues = {};
+    content.querySelectorAll(".result-row").forEach(row => {
+        const nodeEl = row.querySelector(".node-id span");
+        const distEl = row.querySelector(".dist");
+        if (nodeEl && distEl) prevValues[nodeEl.textContent] = distEl.textContent;
+    });
+
     content.innerHTML = "";
 
     const title = document.createElement("div");
@@ -453,10 +551,18 @@ function showShortestPathResult(distance, parents) {
 
         const distEl = document.createElement("span");
         distEl.className = "dist";
-        distEl.textContent = distance[n.id] === Infinity ? "∞" : distance[n.id];
+        const val = distance[n.id] === Infinity ? "∞" : String(distance[n.id]);
+        distEl.textContent = val;
+
+        if (prevValues[String(n.id)] !== undefined && prevValues[String(n.id)] !== val) {
+            distEl.classList.add("updated");
+            setTimeout(() => distEl.classList.remove("updated"), 600);
+        }
 
         row.appendChild(nodeEl);
         row.appendChild(distEl);
+        row.style.cursor = "pointer";
+        row.addEventListener("click", () => highlightPath(n.id));
         content.appendChild(row);
     });
 }

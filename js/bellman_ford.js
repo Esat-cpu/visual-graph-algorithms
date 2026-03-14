@@ -15,6 +15,8 @@ function bellman_ford(graph, startId) {
     distance[startId] = 0;
     parents[startId] = null;
 
+    steps.push({ current: null, distance: {...distance} });
+
     for (let i = 0; i < graph.nodes.length - 1; ++i) {
         let updated = false;
 

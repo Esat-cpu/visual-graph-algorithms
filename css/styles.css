@@ -270,7 +270,7 @@ body {
     padding: 5px 0;
     border-bottom: 1px solid var(--border-subtle);
     font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
+    font-size: 14px;
 }
 
 .result-row:last-child { border-bottom: none; }
@@ -286,7 +286,7 @@ body {
     border-radius: 50%;
     background: var(--node-default);
     color: #fff;
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 700;
     line-height: 20px;
     text-align: center;
@@ -297,6 +297,12 @@ body {
     color: var(--accent);
     font-weight: 600;
 }
+
+.dist.updated {
+    color: #10b981;
+    transition: color 0.6s;
+}
+
 
 /* ── WEIGHT MODAL ── */
 #weight-modal {
