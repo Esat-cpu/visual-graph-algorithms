@@ -442,3 +442,7 @@ body {
     color: #ef4444;
     border-color: #ef4444;
 }
+
+#graph-svg {
+    user-select: none;
+}

@@ -67,6 +67,8 @@ function render() {
         .attr("stroke-width", 2);
     nodeGroups.select("text").text(n => n.id);
 
+    nodeGroups.call(drag);
+
     // Right drag — add edge
     nodeGroups.on("mousedown", function(event) {
         if (event.button !== 2) return;
@@ -97,6 +99,18 @@ const dragLine = svg.append("line")
     .attr("stroke-width", 2)
     .attr("stroke-dasharray", "6,3")
     .attr("opacity", 0);
+
+
+// ── NODE DRAG ──
+const drag = d3.drag()
+    .on("start", function() {})
+    .on("drag", function(event, d) {
+        if (locked) return;
+        d.x = event.x;
+        d.y = event.y;
+        render();
+    })
+    .on("end", function() {});
 
 
 d3.select("#graph-container")
