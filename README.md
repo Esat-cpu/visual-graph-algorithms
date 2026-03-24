@@ -35,10 +35,6 @@ An interactive graph algorithm visualizer built with Vanilla JS and D3.js.
 
 ## Running Locally
 
-Open `index.html` in your browser
-
-OR run:
-
 ```bash
 python -m http.server 8000
 ```
