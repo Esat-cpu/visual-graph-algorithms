@@ -20,6 +20,7 @@ function bellman_ford(graph, startId) {
     parents[startId] = null;
 
     steps.push({ current: null, distance: {...distance} });
+    let lastDistance = steps[0].distance;
 
     // Any shortest path uses at most (V - 1) edges, so relaxing every edge
     // V - 1 times is guaranteed to settle all reachable distances
@@ -27,11 +28,14 @@ function bellman_ford(graph, startId) {
         let updated = false;
 
         graph.edges.forEach(e => {
+            let edgeChanged = false;
+
             // Relax the stored source→target direction
             if (distance[e.target] > distance[e.source] + e.weight) {
                 distance[e.target] = distance[e.source] + e.weight;
                 parents[e.target] = e.source;
                 updated = true;
+                edgeChanged = true;
             }
 
             // Undirected edges connect both ways, so also relax the reverse
@@ -40,9 +44,14 @@ function bellman_ford(graph, startId) {
                 distance[e.source] = distance[e.target] + e.weight;
                 parents[e.source] = e.target;
                 updated = true;
+                edgeChanged = true;
             }
 
-            steps.push({ current: e, distance: {...distance} });
+            // Snapshot distances only when this relaxation changed something;
+            // otherwise reuse the previous snapshot — identical values, no
+            // O(V) copy for every single edge relaxation.
+            if (edgeChanged) lastDistance = { ...distance };
+            steps.push({ current: e, distance: lastDistance });
         });
 
         // If a full pass changes nothing, distances are final — stop early
