@@ -36,10 +36,19 @@ An interactive graph algorithm visualizer built with Vanilla JS and D3.js.
 ## Running Locally
 
 ```bash
-python -m http.server 8000
+npm install        # install local dependencies (d3, bootstrap)
+npm run serve      # start a local server at http://localhost:8000
 ```
 
-Then open `http://localhost:8000` in your browser.
+Then open `http://localhost:8000` in your browser. Dependencies are served from `node_modules`, so the app works offline after `npm install`.
+
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm test` | Run all algorithm tests |
+| `npm run serve` | Start a local server at `http://localhost:8000` |
+| `npm run check` | Syntax-check every JS file |
 
 
 ## Stack

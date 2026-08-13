@@ -1,0 +1,15 @@
+{
+  "name": "visual-graph-algorithms",
+  "version": "1.0.0",
+  "description": "Interactive graph algorithm visualizer built with vanilla JS and D3.js",
+  "private": true,
+  "scripts": {
+    "test": "node --test",
+    "serve": "python3 -m http.server 8000",
+    "check": "node --check js/graph.js && node --check js/dijkstra.js && node --check js/bellman_ford.js && node --check js/kruskal.js && node --check js/prim.js && node --check js/main.js"
+  },
+  "dependencies": {
+    "bootstrap": "^5.3.3",
+    "d3": "^7.9.0"
+  }
+}
