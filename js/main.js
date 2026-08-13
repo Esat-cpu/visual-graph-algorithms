@@ -16,9 +16,20 @@ let dragSource = null;
 let pendingEdge = null;
 let dragStartX = 0;
 let dragStartY = 0;
-let currentInterval = null;
 let currentParents = null;
 let renderHandle = null;
+
+// Shared animation engine: all four algorithms feed their precomputed `steps`
+// into this one playback object, so speed changes, stop, seek and reverse all
+// behave identically no matter which algorithm is running.
+const playback = new Playback();
+
+// Base delay (ms per step) of the algorithm currently playing; the speed
+// slider divides it. Stored so a live speed change can recompute the delay.
+let currentBaseDelay = 0;
+
+// Speed multiplier from the slider (0.25× … 8×, default 1×).
+let currentSpeed = 1;
 
 const NODE_SIZE = 24;
 const MIN_DISTANCE = 75;
@@ -58,6 +69,107 @@ function resetVisuals() {
     edgesLayer.selectAll(".edge").classed("edge-cycle", false);
     edgesLayer.selectAll(".edge").select("line").attr("stroke", "#666666").attr("stroke-width", 2);
 }
+
+
+// ── RUN / PLAYBACK BAR ──
+// The RUN button doubles as the stop button while an animation is playing.
+function setRunButtonPlaying(playing) {
+    const btn = document.getElementById("run-btn");
+    if (!btn) return;
+    btn.textContent = playing ? "■ STOP" : "▶ RUN";
+    btn.classList.toggle("playing", playing);
+}
+
+function showTransport() {
+    document.getElementById("transport-group").classList.remove("hidden");
+}
+
+function hideTransport() {
+    document.getElementById("transport-group").classList.add("hidden");
+}
+
+// Reflect the playback position on the scrubber + its label. The scrubber
+// range runs 0…steps.length, so the far right is the completed state.
+function updateScrubberPosition(pos) {
+    const scrubber = document.getElementById("scrubber");
+    const label = document.getElementById("scrub-label");
+    if (!scrubber || !label) return;
+    const clamped = Math.max(0, Math.min(pos, playback.total));
+    scrubber.value = String(clamped);
+    label.textContent = `${clamped} / ${playback.total}`;
+}
+
+playback.onPosition = updateScrubberPosition;
+
+// Common entry point for every algorithm animation. Computes the step delay
+// from the current speed, wires the scrubber to the trace and hands the whole
+// thing to the shared Playback engine. `onDone` receives the direction: 1 when
+// the trace ended normally, -1 when it was rewound all the way back.
+function beginPlayback(steps, baseDelay, onTick, onDone) {
+    stopAnimation();                 // clear any previous session
+    startLock();
+    setRunButtonPlaying(true);
+    currentBaseDelay = baseDelay;
+    currentSpeed = parseFloat(document.getElementById("speed-slider").value) || 1;
+
+    const scrubber = document.getElementById("scrubber");
+    scrubber.max = String(steps.length);
+    updateScrubberPosition(0);
+    showTransport();
+
+    playback.start(
+        steps,
+        onTick,
+        (dir) => {
+            onDone(dir);
+            stopLock();
+            setRunButtonPlaying(false);
+        },
+        Math.round(baseDelay / currentSpeed)
+    );
+}
+
+// The completed state shows special visuals (shortest-path parents, negative
+// cycle glow, unlocked graph). Rewinding back into the steps must undo those
+// before any earlier frame is rendered.
+function leaveDone() {
+    startLock();
+    resetVisuals();
+}
+
+// REV toggles continuous reverse playback. Pressed while running it simply
+// flips the direction; pressed after completion it leaves the done state and
+// rewinds from the last step.
+function toggleReversePlayback() {
+    if (playback.total === 0) return;
+    if (playback.running) {
+        playback.setDirection(playback.direction === 1 ? -1 : 1);
+        return;
+    }
+    if (playback.atEnd) leaveDone();
+    playback.setDirection(-1);
+    playback.play();
+}
+
+// Dragging the scrubber seeks anywhere in the trace; seeking out of the done
+// state back into the steps first undoes the completion visuals.
+document.getElementById("scrubber").addEventListener("input", function() {
+    const target = parseInt(this.value, 10);
+    if (playback.atEnd && target < playback.total) leaveDone();
+    playback.seek(target);
+});
+
+document.getElementById("rev-btn").addEventListener("click", toggleReversePlayback);
+
+// Speed slider: value shown live, and while an animation runs it takes effect
+// on the very next step.
+document.getElementById("speed-slider").addEventListener("input", function() {
+    currentSpeed = parseFloat(this.value) || 1;
+    document.getElementById("speed-label").textContent = `${currentSpeed}×`;
+    if (playback.running && currentBaseDelay) {
+        playback.setDelay(Math.round(currentBaseDelay / currentSpeed));
+    }
+});
 
 
 // Compute line endpoints + weight label position for one edge.
@@ -392,18 +504,18 @@ d3.select("#graph-container")
                     return !(e.source === dragSource.id && e.target === targetNode.id) &&
                            !(e.source === targetNode.id && e.target === dragSource.id);
                 });
-                resetVisuals();
+                stopAnimation();
                 render();
             } else {
                 pendingEdge = { source: dragSource.id, target: targetNode.id };
                 showWeightModal();
-                resetVisuals();
+                stopAnimation();
             }
         } else if (dist < 5) {
             // No drag — remove node
             graph.nodes = graph.nodes.filter(n => n.id !== dragSource.id);
             graph.edges = graph.edges.filter(e => e.source !== dragSource.id && e.target !== dragSource.id);
-            resetVisuals();
+            stopAnimation();
             render();
         }
 
@@ -420,12 +532,13 @@ d3.select("#graph-container").on("click", function(event) {
     const [x, y] = d3.pointer(event, svg.node());
     if (isTooClose(x, y)) return;
     graph.addNode(x, y);
-    resetVisuals();
+    stopAnimation();
     render();
 });
 
 // ── CLEAR GRAPH ──
 document.getElementById("clear-graph-btn").addEventListener("click", () => {
+    stopAnimation();
     graph.nodes = [];
     graph.edges = [];
     graph.nodeIdCounter = 0;
@@ -520,6 +633,11 @@ document.getElementById("mode-directed").addEventListener("click", () => switchW
 
 // ── RUN BUTTON ──
 document.getElementById("run-btn").addEventListener("click", () => {
+    // While an animation is playing the same button becomes STOP.
+    if (playback.running) {
+        stopAnimation();
+        return;
+    }
     if (graph.nodes.length === 0) return;
     resetVisuals();
 
@@ -565,13 +683,12 @@ document.getElementById("run-btn").addEventListener("click", () => {
 
 // ── ANIMATION HELPERS ──
 function stopAnimation() {
-    if (currentInterval) {
-        clearInterval(currentInterval);
-        currentInterval = null;
-        locked = false;
-        document.getElementById("graph-container").classList.remove("locked");
-        resetVisuals();
-    }
+    playback.stop();
+    locked = false;
+    document.getElementById("graph-container").classList.remove("locked");
+    setRunButtonPlaying(false);
+    hideTransport();
+    resetVisuals();
 }
 
 function startLock() {
@@ -585,181 +702,150 @@ function stopLock() {
 }
 
 // ── ANIMATE Dijkstra ──
+// Base delays (ms per step at 1×): the speed slider divides them live.
 function animateDijkstra(steps, parents) {
-    stopAnimation();
-    startLock();
+    beginPlayback(steps, 1200,
+        // One step: paint the current node and its incident edges.
+        (step) => {
+            edgesLayer.selectAll(".edge")
+                .select("line")
+                .attr("stroke", e =>
+                    (e.source === step.current || e.target === step.current) ? "#bc5dcb" : "#666666"
+                )
+                .attr("stroke-width", e =>
+                    (e.source === step.current || e.target === step.current) ? 3 : 2
+                );
 
-    let i = 0;
-    currentInterval = setInterval(() => {
-        if (i >= steps.length) {
-            clearInterval(currentInterval);
-            currentInterval = null;
-            nodesLayer.selectAll(".node").select("circle").attr("fill", "#3b82f6");
-            edgesLayer.selectAll(".edge").select("line").attr("stroke", "#666666").attr("stroke-width", 2);
-            currentParents = parents;
-            stopLock();
-            showShortestPathResult(steps[steps.length - 1].distance, parents);
-            return;
-        }
-
-        const step = steps[i];
-
-        edgesLayer.selectAll(".edge")
-            .select("line")
-            .attr("stroke", e =>
-                (e.source === step.current || e.target === step.current) ? "#bc5dcb" : "#666666"
-            )
-            .attr("stroke-width", e =>
-                (e.source === step.current || e.target === step.current) ? 3 : 2
-            );
-
-        nodesLayer.selectAll(".node")
-            .select("circle")
-            .attr("fill", n => {
-                if (n.id === step.current) return "#10b981";
-                if (step.visited[n.id]) return "#f59e0b";
-                return "#3b82f6";
-            });
-        showShortestPathResult(step.distance, parents);
-        i++;
-    }, 1420);
+            nodesLayer.selectAll(".node")
+                .select("circle")
+                .attr("fill", n => {
+                    if (n.id === step.current) return "#10b981";
+                    if (step.visited[n.id]) return "#f59e0b";
+                    return "#3b82f6";
+                });
+            showShortestPathResult(step.distance, parents);
+        },
+        (dir) => {
+            if (dir === 1) {
+                nodesLayer.selectAll(".node").select("circle").attr("fill", "#3b82f6");
+                edgesLayer.selectAll(".edge").select("line").attr("stroke", "#666666").attr("stroke-width", 2);
+                currentParents = parents;
+                showShortestPathResult(steps[steps.length - 1].distance, parents);
+            } else {
+                resetVisuals();
+            }
+        });
 }
-
 
 
 // ── ANIMATE BELLMAN-FORD ──
 function animateBellmanFord(steps, parents, negativeCycle, cycleEdges, cycleNodes) {
-    stopAnimation();
-    startLock();
+    beginPlayback(steps, 1000,
+        (step) => {
+            // Steps without a current edge only refresh the output panel.
+            if (step.current) {
+                // Reset edges
+                edgesLayer.selectAll(".edge").select("line").attr("stroke", "#666666").attr("stroke-width", 2);
 
-    let i = 0;
-    currentInterval = setInterval(() => {
-        if (i >= steps.length) {
-            clearInterval(currentInterval);
-            currentInterval = null;
-            edgesLayer.selectAll(".edge").select("line").attr("stroke", "#666666");
-            nodesLayer.selectAll(".node").select("circle").attr("fill", "#3b82f6");
-            currentParents = parents;
-            stopLock();
-            if (negativeCycle) {
-                // Glow the negative cycle red so it is visible at a glance
-                const cycleEdgeSet = new Set(cycleEdges);
+                // Current edge — sarı
                 edgesLayer.selectAll(".edge")
-                    .classed("edge-cycle", e => cycleEdgeSet.has(e));
-                nodesLayer.selectAll(".node")
-                    .select("circle")
-                    .attr("fill", n => cycleNodes.includes(n.id) ? "#ef4444" : "#3b82f6");
-                showNegativeCycleWarning();
-            } else {
-                showShortestPathResult(steps[steps.length - 1].distance, parents);
+                    .filter(e => e.source === step.current.source && e.target === step.current.target)
+                    .select("line")
+                    .attr("stroke", "#f59e0b")
+                    .attr("stroke-width", 3);
             }
-            return;
-        }
 
-        const step = steps[i];
-
-        if (!step.current) {
+            // Update output
             showShortestPathResult(step.distance, parents);
-            i++;
-            return;
-        }
-
-        // Reset edges
-        edgesLayer.selectAll(".edge").select("line").attr("stroke", "#666666").attr("stroke-width", 2);
-
-        // Current edge — sarı
-        edgesLayer.selectAll(".edge")
-            .filter(e => e.source === step.current.source && e.target === step.current.target)
-            .select("line")
-            .attr("stroke", "#f59e0b")
-            .attr("stroke-width", 3);
-
-        // Update output
-        showShortestPathResult(step.distance, parents);
-
-        i++;
-    }, 1200);
+        },
+        (dir) => {
+            if (dir === 1) {
+                edgesLayer.selectAll(".edge").select("line").attr("stroke", "#666666");
+                nodesLayer.selectAll(".node").select("circle").attr("fill", "#3b82f6");
+                currentParents = parents;
+                if (negativeCycle) {
+                    // Glow the negative cycle red so it is visible at a glance
+                    const cycleEdgeSet = new Set(cycleEdges);
+                    edgesLayer.selectAll(".edge")
+                        .classed("edge-cycle", e => cycleEdgeSet.has(e));
+                    nodesLayer.selectAll(".node")
+                        .select("circle")
+                        .attr("fill", n => cycleNodes.includes(n.id) ? "#ef4444" : "#3b82f6");
+                    showNegativeCycleWarning();
+                } else {
+                    showShortestPathResult(steps[steps.length - 1].distance, parents);
+                }
+            } else {
+                resetVisuals();
+            }
+        });
 }
 
 
 // ── ANIMATE PRIM ──
 function animatePrim(steps, mst) {
-    stopAnimation();
-    startLock();
+    beginPlayback(steps, 1000,
+        (step) => {
+            const mstEdges = step.mst || [];
 
-    let i = 0;
-    currentInterval = setInterval(() => {
-        if (i >= steps.length) {
-            clearInterval(currentInterval);
-            currentInterval = null;
             edgesLayer.selectAll(".edge")
-                .classed("edge-active", e => mst.some(m =>
+                .classed("edge-active", e => mstEdges.some(m =>
                     (m.source === e.source && m.target === e.target) ||
                     (m.source === e.target && m.target === e.source)
                 ));
-            nodesLayer.selectAll(".node").select("circle").attr("fill", "#3b82f6");
-            stopLock();
-            showMSTResult(mst);
-            return;
-        }
 
-        const step = steps[i];
-        const mstEdges = step.mst || [];
-
-        edgesLayer.selectAll(".edge")
-            .classed("edge-active", e => mstEdges.some(m =>
-                (m.source === e.source && m.target === e.target) ||
-                (m.source === e.target && m.target === e.source)
-            ));
-
-        nodesLayer.selectAll(".node")
-            .select("circle")
-            .attr("fill", n => n.id === step.current ? "#10b981" : "#3b82f6");
-
-        i++;
-    }, 1000);
+            nodesLayer.selectAll(".node")
+                .select("circle")
+                .attr("fill", n => n.id === step.current ? "#10b981" : "#3b82f6");
+        },
+        (dir) => {
+            if (dir === 1) {
+                edgesLayer.selectAll(".edge")
+                    .classed("edge-active", e => mst.some(m =>
+                        (m.source === e.source && m.target === e.target) ||
+                        (m.source === e.target && m.target === e.source)
+                    ));
+                nodesLayer.selectAll(".node").select("circle").attr("fill", "#3b82f6");
+                showMSTResult(mst);
+            } else {
+                resetVisuals();
+            }
+        });
 }
 
 // ── ANIMATE KRUSKAL ──
 function animateKruskal(steps, mst) {
-    stopAnimation();
-    startLock();
+    beginPlayback(steps, 1000,
+        (step) => {
+            const mstEdges = step.mst || [];
 
-    let i = 0;
-    currentInterval = setInterval(() => {
-        if (i >= steps.length) {
-            clearInterval(currentInterval);
-            edgesLayer.selectAll(".edge").select("line").attr("stroke", "#666666");
-            currentInterval = null;
+            // Current edge — sarı
             edgesLayer.selectAll(".edge")
-                .classed("edge-active", e => mst.some(m =>
+                .select("line")
+                .attr("stroke", e =>
+                    (e.source === step.current.source && e.target === step.current.target) ? "#f59e0b" : "#666666"
+                );
+
+            // MST edges — yeşil parlak
+            edgesLayer.selectAll(".edge")
+                .classed("edge-active", e => mstEdges.some(m =>
                     (m.source === e.source && m.target === e.target) ||
                     (m.source === e.target && m.target === e.source)
                 ));
-            stopLock();
-            showMSTResult(mst);
-            return;
-        }
-
-        const step = steps[i];
-        const mstEdges = step.mst || [];
-
-        // Current edge — sarı
-        edgesLayer.selectAll(".edge")
-            .select("line")
-            .attr("stroke", e =>
-                (e.source === step.current.source && e.target === step.current.target) ? "#f59e0b" : "#666666"
-            );
-
-        // MST edges — yeşil parlak
-        edgesLayer.selectAll(".edge")
-            .classed("edge-active", e => mstEdges.some(m =>
-                (m.source === e.source && m.target === e.target) ||
-                (m.source === e.target && m.target === e.source)
-            ));
-
-        i++;
-    }, 1000);
+        },
+        (dir) => {
+            if (dir === 1) {
+                edgesLayer.selectAll(".edge").select("line").attr("stroke", "#666666");
+                edgesLayer.selectAll(".edge")
+                    .classed("edge-active", e => mst.some(m =>
+                        (m.source === e.source && m.target === e.target) ||
+                        (m.source === e.target && m.target === e.source)
+                    ));
+                showMSTResult(mst);
+            } else {
+                resetVisuals();
+            }
+        });
 }
 
 
@@ -898,5 +984,17 @@ document.getElementById("clear-btn").addEventListener("click", () => {
 
 // Prevent context menu on right click
 document.addEventListener("contextmenu", e => e.preventDefault());
+
+// Test hook — lets the automated UI tests inspect the app state without
+// exposing any control surface in the page itself.
+if (typeof window !== "undefined") {
+    window.__app = {
+        workspaces,
+        get graph() { return graph; },
+        get activeAlgo() { return activeAlgo; },
+        get playback() { return playback; },
+        get locked() { return locked; }
+    };
+}
 
 render();

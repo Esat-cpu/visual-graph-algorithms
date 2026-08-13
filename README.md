@@ -37,6 +37,17 @@ An interactive graph algorithm visualizer built with Vanilla JS and D3.js.
 
 > **Note:** Prim and Kruskal require a connected undirected graph.
 
+### Playback Controls
+While an algorithm animates, the top bar shows a **SPEED** slider (0.25×–8×, default 1×). It can be changed live — the new speed takes effect on the very next step.
+
+A playback bar appears below the top bar while an animation runs and stays open afterwards so you can review and rewind:
+
+- **⏪ REV** — play the animation backwards (toggle it again to play forward).
+- **Scrubber** — drag to jump to any step, in either direction. Dragging to the far right finishes the animation instantly.
+- The **RUN** button turns into **■ STOP** while an animation plays; click it to cancel.
+
+Editing the graph, switching algorithm or mode, or clearing hides the playback bar and resets the session.
+
 ## Running Locally
 
 ```bash

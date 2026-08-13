@@ -37,9 +37,25 @@
 
         <div class="topbar-divider" id="start-divider"></div>
 
+        <div id="speed-group">
+            <label>SPEED</label>
+            <input id="speed-slider" type="range" min="0.25" max="8" step="0.25" value="1" />
+            <span id="speed-label">1×</span>
+        </div>
+
+        <div class="topbar-divider" id="transport-divider"></div>
+
         <button id="run-btn">▶ RUN</button>
 
         <span id="active-algo-label">DIJKSTRA</span>
+    </div>
+
+    <!-- PLAYBACK TRANSPORT (scrubber + reverse). Shown while an animation is
+         in progress and kept open after it finishes for review/rewind. -->
+    <div id="transport-group" class="hidden">
+        <button id="rev-btn" title="Play in reverse">⏪ REV</button>
+        <input id="scrubber" type="range" min="0" max="0" value="0" step="1" />
+        <span id="scrub-label">0 / 0</span>
     </div>
 
     <!-- MAIN -->
@@ -94,6 +110,7 @@
 
     <script src="node_modules/d3/dist/d3.min.js"></script>
     <script src="js/graph.js"></script>
+    <script src="js/playback.js"></script>
     <script src="js/dijkstra.js"></script>
     <script src="js/bellman_ford.js"></script>
     <script src="js/kruskal.js"></script>
