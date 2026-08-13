@@ -102,6 +102,9 @@ function extractNegativeCycle(graph, parents, start) {
     // Following parents walks the cycle backwards (n_{i+1} = parents[n_i]), so
     // the traversed edge is b→a. Directed edges must match that direction;
     // undirected edges are stored in an arbitrary orientation, so either fits.
+    // Deduplicate by reference: an undirected 2-cycle visits its single edge
+    // once per direction, but consumers want each edge listed only once.
+    const seen = new Set();
     const edges = [];
     for (let i = 0; i < nodes.length; ++i) {
         const a = nodes[i];
@@ -110,7 +113,10 @@ function extractNegativeCycle(graph, parents, start) {
             (e.source === b && e.target === a) ||
             (!graph.directed && e.source === a && e.target === b)
         );
-        if (edge) edges.push(edge);
+        if (edge && !seen.has(edge)) {
+            seen.add(edge);
+            edges.push(edge);
+        }
     }
 
     return { nodes, edges };

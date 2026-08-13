@@ -121,9 +121,9 @@ function test_6() {
     const { negativeCycle, cycleEdges } = bellman_ford(graph, 0);
 
     assert(negativeCycle === true, "Undirected negative edge forms a 2-cycle");
-    assert(cycleEdges.length === 2, "Undirected 2-cycle should contain 2 edges");
-    const total = cycleEdges.reduce((sum, e) => sum + e.weight, 0);
-    assert(total < 0, "Cycle total weight must be negative");
+    assert(cycleEdges.length === 1, "Undirected 2-cycle should deduplicate its single edge");
+    assert(cycleEdges[0].source === 1 && cycleEdges[0].target === 2, "Cycle edge must be the negative one");
+    assert(cycleEdges[0].weight < 0, "Cycle total weight must be negative");
     console.log("Bellman Ford Undirected Cycle Extraction Test Succesful!");
 }
 
