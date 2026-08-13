@@ -16,16 +16,18 @@
     <div id="topbar">
         <div id="app-title">Visual <span>Graph</span> Algorithms</div>
 
-        <button class="algo-btn active" data-algo="dijkstra">DIJKSTRA</button>
-        <button class="algo-btn" data-algo="bellman-ford">BELLMAN–FORD</button>
-        <button class="algo-btn" data-algo="prim">PRIM</button>
-        <button class="algo-btn" data-algo="kruskal">KRUSKAL</button>
+        <div class="btn-group" id="algo-group">
+            <button class="app-btn active" data-algo="dijkstra" title="Dijkstra">DIJKSTRA</button>
+            <button class="app-btn" data-algo="bellman-ford" title="Bellman-Ford">BELLMAN–FORD</button>
+            <button class="app-btn" data-algo="prim" title="Prim">PRIM</button>
+            <button class="app-btn" data-algo="kruskal" title="Kruskal">KRUSKAL</button>
+        </div>
 
         <div class="topbar-divider"></div>
 
-        <div id="graph-mode-group">
-            <button id="mode-undirected" class="mode-btn active">UNDIRECTED</button>
-            <button id="mode-directed" class="mode-btn">DIRECTED</button>
+        <div class="btn-group" id="graph-mode-group">
+            <button id="mode-undirected" class="app-btn active" title="Undirected mode">UNDIRECTED</button>
+            <button id="mode-directed" class="app-btn" title="Directed mode">DIRECTED</button>
         </div>
 
         <div class="topbar-divider"></div>
@@ -38,14 +40,14 @@
         <div class="topbar-divider" id="start-divider"></div>
 
         <div id="speed-group">
-            <label>SPEED</label>
-            <input id="speed-slider" type="range" min="0.25" max="8" step="0.25" value="1" />
+            <label for="speed-slider">SPEED</label>
+            <input id="speed-slider" type="range" min="0.25" max="8" step="0.25" value="1" aria-label="Animation speed" />
             <span id="speed-label">1×</span>
         </div>
 
         <div class="topbar-divider" id="transport-divider"></div>
 
-        <button id="run-btn">▶ RUN</button>
+        <button id="run-btn" title="Run algorithm / stop animation">▶ RUN</button>
 
         <span id="active-algo-label">DIJKSTRA</span>
     </div>
@@ -54,7 +56,7 @@
          in progress and kept open after it finishes for review/rewind. -->
     <div id="transport-group" class="hidden">
         <button id="rev-btn" title="Play in reverse">⏪ REV</button>
-        <input id="scrubber" type="range" min="0" max="0" value="0" step="1" />
+        <input id="scrubber" type="range" min="0" max="0" value="0" step="1" aria-label="Animation position" />
         <span id="scrub-label">0 / 0</span>
     </div>
 
@@ -63,7 +65,16 @@
 
         <!-- GRAPH CANVAS -->
         <div id="graph-container">
-            <button id="clear-graph-btn">✕ CLEAR</button>
+            <button id="clear-graph-btn" title="Clear graph">✕ CLEAR</button>
+
+            <!-- Colour legend for algorithm highlights -->
+            <div id="legend" aria-hidden="true">
+                <span class="legend-item"><i class="swatch" style="background:#3b82f6"></i>NODE</span>
+                <span class="legend-item"><i class="swatch" style="background:#f59e0b"></i>VISITED</span>
+                <span class="legend-item"><i class="swatch" style="background:#10b981"></i>CURRENT</span>
+                <span class="legend-item"><i class="swatch-line" style="background:#bc5dcb"></i>ACTIVE EDGE</span>
+                <span class="legend-item"><i class="swatch-line" style="background:#ef4444"></i>NEG. CYCLE</span>
+            </div>
 
             <svg id="graph-svg">
                 <defs>

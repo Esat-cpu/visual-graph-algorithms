@@ -80,6 +80,15 @@ function setRunButtonPlaying(playing) {
     btn.classList.toggle("playing", playing);
 }
 
+// Disable RUN while the active graph has no nodes — animating an empty graph
+// would just paint an empty trace.
+function updateRunDisabled() {
+    const btn = document.getElementById("run-btn");
+    if (!btn) return;
+    btn.disabled = graph.nodes.length === 0;
+    btn.classList.toggle("disabled", btn.disabled);
+}
+
 function showTransport() {
     document.getElementById("transport-group").classList.remove("hidden");
 }
@@ -422,6 +431,9 @@ function render() {
     // Stats
     document.getElementById("stat-nodes").textContent = graph.nodes.length;
     document.getElementById("stat-edges").textContent = graph.edges.length;
+
+    // RUN is pointless while the canvas is empty
+    updateRunDisabled();
 }
 
 // ── DRAG LINE (temporary line while dragging) ──
@@ -588,7 +600,7 @@ document.getElementById("weight-input").addEventListener("keydown", e => {
 // ── ALGO BUTTONS ──
 let activeAlgo = "dijkstra";
 
-document.querySelectorAll(".algo-btn").forEach(btn => {
+document.querySelectorAll(".app-btn[data-algo]").forEach(btn => {
     btn.addEventListener("click", () => {
         const algo = btn.dataset.algo;
         if (algo === activeAlgo) return;
@@ -598,7 +610,7 @@ document.querySelectorAll(".algo-btn").forEach(btn => {
         resetVisuals();
         document.getElementById("result-content").innerHTML = '<p class="result-empty">Run an algorithm<br>to see results here.</p>';
 
-        document.querySelectorAll(".algo-btn").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".app-btn[data-algo]").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
 
         document.getElementById("active-algo-label").textContent = btn.textContent;
@@ -619,7 +631,7 @@ document.querySelectorAll(".algo-btn").forEach(btn => {
 // own nodes/edges untouched, so switching back restores the exact same state.
 function switchWorkspace(name) {
     graph = workspaces[name];
-    document.querySelectorAll(".mode-btn").forEach(b => {
+    document.querySelectorAll("#graph-mode-group .app-btn").forEach(b => {
         b.classList.toggle("active", b.id === `mode-${name}`);
     });
     stopAnimation();
@@ -676,6 +688,15 @@ document.getElementById("run-btn").addEventListener("click", () => {
     } else {
         const { steps, mst } = kruskal(graph);
         animateKruskal(steps, mst);
+    }
+});
+
+// Enter anywhere in the top bar (most useful right after typing a start node
+// id) triggers the same action as clicking RUN.
+document.getElementById("topbar").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && document.activeElement.tagName === "INPUT") {
+        e.preventDefault();
+        document.getElementById("run-btn").click();
     }
 });
 

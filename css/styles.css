@@ -30,6 +30,12 @@ body {
     overflow: hidden;
 }
 
+/* Consistent keyboard-focus indicator for every interactive element */
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
 /* ── TOP BAR ── */
 #topbar {
     display: flex;
@@ -57,7 +63,14 @@ body {
     color: var(--accent);
 }
 
-.algo-btn {
+/* Segmented button groups (algorithms, graph mode). A `.btn-group` wraps a
+   row of `.app-btn`s so the first/last radius rules stay reliable no matter
+   what siblings surround the group. */
+.btn-group {
+    display: flex;
+}
+
+.app-btn {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
     font-weight: 600;
@@ -65,62 +78,28 @@ body {
     padding: 6px 14px;
     background: transparent;
     border: 1px solid var(--border);
+    border-right: none;
     color: var(--text-muted);
     cursor: pointer;
     transition: all 0.15s ease;
     white-space: nowrap;
-    border-right: none;
 }
 
-.algo-btn:first-of-type { border-radius: 4px 0 0 4px; }
-.algo-btn[data-algo="kruskal"] {
-    border-right: 1px solid var(--border);
-    border-radius: 0 4px 4px 0;
-}
+.btn-group .app-btn:first-child { border-radius: 4px 0 0 4px; }
+.btn-group .app-btn:last-child { border-radius: 0 4px 4px 0; border-right: 1px solid var(--border); }
 
-.algo-btn:hover {
+.app-btn:hover {
     background: var(--bg-panel);
     color: var(--text-primary);
 }
 
-.algo-btn.active {
+.app-btn.active {
     background: var(--accent-glow);
     border-color: var(--accent);
     color: var(--accent);
 }
 
-.algo-btn.active + .algo-btn { border-left-color: var(--accent); }
-
-.mode-btn {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    padding: 6px 14px;
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: all 0.15s ease;
-    white-space: nowrap;
-    border-right: none;
-}
-
-.mode-btn:first-of-type { border-radius: 4px 0 0 4px; }
-.mode-btn:last-of-type { border-radius: 0 4px 4px 0; border-right: 1px solid var(--border); }
-
-.mode-btn:hover {
-    background: var(--bg-panel);
-    color: var(--text-primary);
-}
-
-.mode-btn.active {
-    background: var(--accent-glow);
-    border-color: var(--accent);
-    color: var(--accent);
-}
-
-.mode-btn.active + .mode-btn { border-left-color: var(--accent); }
+.app-btn.active + .app-btn { border-left-color: var(--accent); }
 
 .topbar-divider {
     width: 1px;
@@ -303,6 +282,46 @@ body {
     height: 100%;
 }
 
+/* Colour legend — small overlay in the bottom-left corner of the canvas */
+#legend {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    z-index: 10;
+    display: flex;
+    gap: 14px;
+    padding: 6px 12px;
+    background: rgba(17, 17, 17, 0.85);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    pointer-events: none;
+    user-select: none;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.legend-item .swatch {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+}
+
+.legend-item .swatch-line {
+    width: 14px;
+    height: 3px;
+    border-radius: 2px;
+}
+
 /* ── RESULT PANEL ── */
 #result-panel {
     width: 260px;
@@ -387,6 +406,10 @@ body {
     border-bottom: 1px solid var(--border-subtle);
     font-family: 'JetBrains Mono', monospace;
     font-size: 14px;
+}
+
+.result-row:hover {
+    background: var(--accent-glow);
 }
 
 .result-row:last-child { border-bottom: none; }
@@ -610,4 +633,21 @@ body {
 @keyframes cycle-pulse {
     0%, 100% { filter: drop-shadow(0 0 2px #ef4444); }
     50%      { filter: drop-shadow(0 0 10px #ef4444); }
+}
+
+/* ── MEDIUM WINDOWS ──
+   When the top bar no longer fits on one line it wraps onto two rows and the
+   dividers drop out, keeping every control reachable without horizontal
+   scrolling. */
+@media (max-width: 1180px) {
+    #topbar {
+        flex-wrap: wrap;
+        height: auto;
+        padding: 8px 16px;
+        row-gap: 8px;
+    }
+
+    .topbar-divider {
+        display: none;
+    }
 }
