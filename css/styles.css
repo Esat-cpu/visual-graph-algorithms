@@ -189,6 +189,27 @@ body {
     border-color: var(--accent);
 }
 
+#import-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    margin-left: 6px;
+}
+
+#import-btn:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
 #speed-group {
     display: flex;
     align-items: center;
@@ -477,6 +498,54 @@ body {
 }
 
 #weight-modal.show { display: flex; }
+
+/* IMPORT confirm modal — same look as the weight modal, but with a message */
+#import-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+#import-modal.show { display: flex; }
+
+#import-modal-box {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    width: 340px;
+}
+
+#import-modal-box h6 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+}
+
+#import-modal-box p {
+    font-size: 13px;
+    color: var(--text-primary);
+    line-height: 1.6;
+    margin-bottom: 18px;
+}
+
+#import-confirm { background: #ef4444; color: #fff; }
+#import-confirm:hover { background: #b91c1c; }
+#import-cancel { background: var(--bg-surface); color: var(--text-muted); border: 1px solid var(--border); }
+#import-cancel:hover { color: var(--text-primary); }
+
+@media (max-width: 640px) {
+    #import-modal-box {
+        width: calc(100% - 32px);
+    }
+}
 
 #weight-modal-box {
     background: var(--bg-panel);

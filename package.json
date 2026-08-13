@@ -6,7 +6,7 @@
   "scripts": {
     "test": "node --test",
     "serve": "python3 -m http.server 8000",
-    "check": "node --check js/graph.js && node --check js/dijkstra.js && node --check js/bellman_ford.js && node --check js/kruskal.js && node --check js/prim.js && node --check js/playback.js && node --check js/main.js && node --check js/touch.js && node --check js/mobile.js"
+    "check": "node --check js/graph.js && node --check js/dijkstra.js && node --check js/bellman_ford.js && node --check js/kruskal.js && node --check js/prim.js && node --check js/playback.js && node --check js/io.js && node --check js/main.js && node --check js/touch.js && node --check js/mobile.js"
   },
   "dependencies": {
     "bootstrap": "^5.3.3",

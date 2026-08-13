@@ -739,6 +739,74 @@ document.getElementById("export-btn").addEventListener("click", () => {
 });
 
 
+// ── IMPORT ──
+// Load a graph from a file into its matching workspace (the loaded graph
+// replaces the existing graph of that mode). Confirm first whenever that
+// workspace already has a graph; if the loaded mode differs from the active
+// one, switch to it afterwards.
+document.getElementById("import-btn").addEventListener("click", () => {
+    document.getElementById("import-input").click();
+});
+
+document.getElementById("import-input").addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        let data;
+        try {
+            data = parseGraphFile(String(reader.result));
+        } catch (err) {
+            flashStatus("⚠ " + err.message);
+            return;
+        }
+
+        const plan = importPlan(data, workspaces, graph.directed ? "directed" : "undirected");
+        if (plan.needsConfirm) {
+            document.getElementById("import-message").textContent = plan.message;
+            document.getElementById("import-modal").classList.add("show");
+            pendingImport = plan;
+        } else {
+            applyImport(plan);
+        }
+    };
+    reader.readAsText(file);
+});
+
+// Staged import, waiting on the confirm modal.
+let pendingImport = null;
+
+document.getElementById("import-confirm").addEventListener("click", () => {
+    document.getElementById("import-modal").classList.remove("show");
+    const plan = pendingImport;
+    pendingImport = null;
+    if (plan) applyImport(plan);
+});
+
+document.getElementById("import-cancel").addEventListener("click", () => {
+    document.getElementById("import-modal").classList.remove("show");
+    pendingImport = null;
+});
+
+// Replace the workspace matching the loaded file's mode with its data, then
+// show that workspace (switching if the loaded mode differs from active).
+function applyImport(plan) {
+    const target = workspaces[plan.mode];
+    const data = plan.data;
+    target.nodes = data.nodes.map(n => ({ id: n.id, x: n.x, y: n.y }));
+    target.edges = data.edges.map(e => ({ source: e.source, target: e.target, weight: e.weight }));
+    target.nodeIdCounter = data.nodeIdCounter;
+
+    if (graph !== target) {
+        switchWorkspace(plan.mode); // switchWorkspace already renders
+    } else {
+        stopAnimation();
+        render();
+    }
+}
+
 
 // ── ANIMATION HELPERS ──
 function stopAnimation() {

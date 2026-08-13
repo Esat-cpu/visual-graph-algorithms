@@ -50,6 +50,7 @@
         <button id="run-btn" title="Run algorithm / stop animation">▶ RUN</button>
 
         <button id="export-btn" title="Save the current graph to a file">⬇ EXPORT</button>
+        <button id="import-btn" title="Load a graph from a file">⬆ IMPORT</button>
 
         <span id="active-algo-label">DIJKSTRA</span>
     </div>
@@ -109,6 +110,9 @@
         <span class="status-item">LEFT CLICK — add node &nbsp;·&nbsp; RIGHT DRAG — add/remove edge &nbsp;·&nbsp; RIGHT CLICK node — remove</span>
     </div>
 
+    <!-- HIDDEN FILE INPUT for import -->
+    <input type="file" id="import-input" accept=".json,application/json" hidden />
+
     <!-- WEIGHT MODAL -->
     <div id="weight-modal">
         <div id="weight-modal-box">
@@ -118,6 +122,19 @@
                 <button id="weight-remove" hidden>REMOVE EDGE</button>
                 <button id="weight-confirm">CONFIRM</button>
                 <button id="weight-cancel">CANCEL</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- IMPORT CONFIRM MODAL — shown when the target workspace already has a
+         graph, so loading the file can't silently destroy existing work. -->
+    <div id="import-modal">
+        <div id="import-modal-box">
+            <h6>REPLACE GRAPH?</h6>
+            <p id="import-message"></p>
+            <div class="modal-btns">
+                <button id="import-confirm">REPLACE</button>
+                <button id="import-cancel">CANCEL</button>
             </div>
         </div>
     </div>

@@ -83,6 +83,51 @@ function exportFilename(graph) {
 }
 
 
+// Parse a file's text into the validated JSON payload. Throws an Error with a
+// human-readable message on any failure (bad JSON, wrong format, malformed).
+function parseGraphFile(text) {
+    let data;
+    try {
+        data = JSON.parse(text);
+    } catch (err) {
+        throw new Error("Not valid JSON");
+    }
+    const problems = validateGraphData(data);
+    if (problems.length > 0) {
+        throw new Error(problems[0]);
+    }
+    return data;
+}
+
+
+// Work out what an import would do to the current workspaces, WITHOUT touching
+// them. Returns a plan the caller can confirm and then execute:
+//   mode           — which workspace ("directed" / "undirected") the file has
+//   sameMode       — true when that matches the active workspace mode
+//   needsConfirm   — true when that workspace is currently non-empty
+//   message        — the exact confirm prompt to show
+//   data           — the validated payload to apply
+function importPlan(data, workspaces, activeMode) {
+    const mode = data.directed ? "directed" : "undirected";
+    const target = workspaces[mode];
+    const needsConfirm = target.nodes.length > 0 || target.edges.length > 0;
+    return {
+        mode,
+        sameMode: mode === activeMode,
+        needsConfirm,
+        message: `Your current ${mode} graph will be replaced by the loaded one. Continue?`,
+        data
+    };
+}
+
+
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { graphToJSON, downloadFile, validateGraphData, exportFilename };
+    module.exports = {
+        graphToJSON,
+        downloadFile,
+        validateGraphData,
+        exportFilename,
+        parseGraphFile,
+        importPlan
+    };
 }
