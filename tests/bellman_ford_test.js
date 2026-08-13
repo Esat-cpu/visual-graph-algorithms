@@ -30,4 +30,22 @@ function test_1() {
 }
 
 
+function test_2() {
+    const graph = new Graph();
+
+    graph.addNode(0, 0);
+    graph.addNode(1, 1);
+    graph.addNode(2, 2);
+
+    graph.addEdge(0, 1, 1);
+    graph.addEdge(1, 2, -3);
+
+    const { negativeCycle } = bellman_ford(graph, 0);
+
+    assert(negativeCycle === true, "Negative cycle should be detected");
+    console.log("Bellman Ford Test 2 Succesful!");
+}
+
+
 test_1();
+test_2();
