@@ -726,6 +726,19 @@ document.getElementById("topbar").addEventListener("keydown", (e) => {
 });
 
 
+// ── EXPORT ──
+// Save the ACTIVE workspace to a JSON file on the computer. Only the graph
+// currently being edited is exported (per roadmap: export = active workspace).
+document.getElementById("export-btn").addEventListener("click", () => {
+    if (graph.nodes.length === 0 && graph.edges.length === 0) {
+        flashStatus("⚠ Nothing to export yet — add some nodes first");
+        return;
+    }
+    stopAnimation();
+    downloadFile(exportFilename(graph), JSON.stringify(graphToJSON(graph), null, 2));
+});
+
+
 
 // ── ANIMATION HELPERS ──
 function stopAnimation() {

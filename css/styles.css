@@ -167,6 +167,28 @@ body {
 #run-btn.playing { background: #ef4444; }
 #run-btn.playing:hover { background: #b91c1c; }
 
+/* Export — quiet outline button beside RUN */
+#export-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    margin-left: 8px;
+}
+
+#export-btn:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
 #speed-group {
     display: flex;
     align-items: center;
