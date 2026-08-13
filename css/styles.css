@@ -303,6 +303,7 @@ body {
     display: flex;
     flex: 1;
     overflow: hidden;
+    position: relative;   /* anchor for the bottom-sheet result panel */
 }
 
 /* ── GRAPH AREA ── */

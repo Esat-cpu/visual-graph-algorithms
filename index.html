@@ -90,8 +90,9 @@
             </svg>
         </div>
 
-        <!-- RESULT PANEL -->
-        <div id="result-panel">
+        <!-- RESULT PANEL (becomes a bottom sheet on narrow screens; the class
+             is always present, the @media rule decides when it applies) -->
+        <div id="result-panel" class="bottom-sheet">
             <div id="result-panel-header">
                 <span>OUTPUT</span>
                 <button id="clear-btn">CLEAR</button>

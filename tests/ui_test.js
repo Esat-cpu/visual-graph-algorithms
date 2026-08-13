@@ -385,6 +385,21 @@ function test_playback_bar_stays_after_completion() {
     console.log("UI Test 6 (bar after completion) Succesful!");
 }
 
+function test_result_panel_is_a_bottom_sheet_on_mobile() {
+    const { doc, win } = buildApp();
+
+    // The mobile CSS targets #result-panel.bottom-sheet; if the class is ever
+    // dropped from the markup the panel silently stops becoming a bottom sheet
+    // on phones (the regression that this test guards against).
+    const panel = doc.getElementById("result-panel");
+    assert(panel.classList.contains("bottom-sheet"), "result panel carries the bottom-sheet class");
+    assert(panel.classList.contains("bottom-sheet") && panel.classList.contains("open") === false,
+           "panel starts collapsed to its header");
+
+    win.close();
+    console.log("UI Test 7 (bottom-sheet class) Succesful!");
+}
+
 
 test_run_button_disabled_until_graph_has_nodes();
 test_legend_and_mode_switch();
@@ -392,3 +407,4 @@ test_algo_switch_updates_label_and_hides_start_input();
 test_enter_key_runs_algorithm();
 test_speed_slider_scales_step_delay_live();
 test_playback_bar_stays_after_completion();
+test_result_panel_is_a_bottom_sheet_on_mobile();
