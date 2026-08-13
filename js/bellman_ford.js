@@ -50,16 +50,70 @@ function bellman_ford(graph, startId) {
     }
 
     // Negative cycle detection: after V - 1 passes no edge should still be
-    // relaxable. If one is, a reachable negative cycle exists.
+    // relaxable. If one is, a reachable negative cycle exists. This extra pass
+    // keeps updating distances/parents so the cycle can be reconstructed from
+    // the parent pointers afterwards.
     let negativeCycle = false;
+    let cycleNode = null;
     graph.edges.forEach(e => {
-        if (distance[e.target] > distance[e.source] + e.weight ||
-            (!graph.directed && distance[e.source] > distance[e.target] + e.weight)) {
+        if (distance[e.target] > distance[e.source] + e.weight) {
+            distance[e.target] = distance[e.source] + e.weight;
+            parents[e.target] = e.source;
             negativeCycle = true;
+            cycleNode = e.target;
+        }
+
+        if (!graph.directed && distance[e.source] > distance[e.target] + e.weight) {
+            distance[e.source] = distance[e.target] + e.weight;
+            parents[e.source] = e.target;
+            negativeCycle = true;
+            cycleNode = e.source;
         }
     });
 
-    return { steps, parents, negativeCycle };
+    const cycle = negativeCycle
+        ? extractNegativeCycle(graph, parents, cycleNode)
+        : { nodes: [], edges: [] };
+
+    return { steps, parents, negativeCycle, cycleEdges: cycle.edges, cycleNodes: cycle.nodes };
+}
+
+
+// Reconstruct one negative cycle by walking the parent pointers backwards.
+// Walking back V times is guaranteed to land on a node inside the cycle;
+// from there, following parents circles back to it. The consecutive node
+// pairs then map to the stored edge objects, ready for highlighting.
+function extractNegativeCycle(graph, parents, start) {
+    let node = start;
+
+    // Walk back V times so `node` is guaranteed to sit on the cycle
+    for (let i = 0; i < graph.nodes.length; ++i)
+        node = parents[node];
+
+    // Walk the cycle until we return to `node`
+    const nodes = [node];
+    let x = parents[node];
+    while (x !== node) {
+        nodes.push(x);
+        x = parents[x];
+    }
+
+    // Map consecutive node pairs to the actual stored edge objects.
+    // Following parents walks the cycle backwards (n_{i+1} = parents[n_i]), so
+    // the traversed edge is b→a. Directed edges must match that direction;
+    // undirected edges are stored in an arbitrary orientation, so either fits.
+    const edges = [];
+    for (let i = 0; i < nodes.length; ++i) {
+        const a = nodes[i];
+        const b = nodes[(i + 1) % nodes.length];
+        const edge = graph.edges.find(e =>
+            (e.source === b && e.target === a) ||
+            (!graph.directed && e.source === a && e.target === b)
+        );
+        if (edge) edges.push(edge);
+    }
+
+    return { nodes, edges };
 }
 
 if (typeof module !== 'undefined') module.exports = { bellman_ford };

@@ -54,6 +54,7 @@ function resetVisuals() {
     currentParents = null;
     nodesLayer.selectAll(".node").select("circle").attr("fill", "#3b82f6");
     edgesLayer.selectAll(".edge").classed("edge-active", false);
+    edgesLayer.selectAll(".edge").classed("edge-cycle", false);
     edgesLayer.selectAll(".edge").select("line").attr("stroke", "#666666").attr("stroke-width", 2);
 }
 
@@ -500,8 +501,8 @@ document.getElementById("run-btn").addEventListener("click", () => {
             const { steps, parents } = dijkstra(graph, startId);
             animateDijkstra(steps, parents);
         } else if (activeAlgo === "bellman-ford") {
-            const { steps, parents, negativeCycle } = bellman_ford(graph, startId);
-            animateBellmanFord(steps, parents, negativeCycle);
+            const { steps, parents, negativeCycle, cycleEdges, cycleNodes } = bellman_ford(graph, startId);
+            animateBellmanFord(steps, parents, negativeCycle, cycleEdges, cycleNodes);
         } else if (activeAlgo === "prim") {
             const { steps, mst } = prim(graph, startId);
             animatePrim(steps, mst);
@@ -579,7 +580,7 @@ function animateDijkstra(steps, parents) {
 
 
 // ── ANIMATE BELLMAN-FORD ──
-function animateBellmanFord(steps, parents, negativeCycle) {
+function animateBellmanFord(steps, parents, negativeCycle, cycleEdges, cycleNodes) {
     stopAnimation();
     startLock();
 
@@ -593,6 +594,13 @@ function animateBellmanFord(steps, parents, negativeCycle) {
             currentParents = parents;
             stopLock();
             if (negativeCycle) {
+                // Glow the negative cycle red so it is visible at a glance
+                const cycleEdgeSet = new Set(cycleEdges);
+                edgesLayer.selectAll(".edge")
+                    .classed("edge-cycle", e => cycleEdgeSet.has(e));
+                nodesLayer.selectAll(".node")
+                    .select("circle")
+                    .attr("fill", n => cycleNodes.includes(n.id) ? "#ef4444" : "#3b82f6");
                 showNegativeCycleWarning();
             } else {
                 showShortestPathResult(steps[steps.length - 1].distance, parents);

@@ -514,3 +514,19 @@ body {
     fill: #93c5fd;
     filter: drop-shadow(0 0 8px #0061fd) drop-shadow(0 0 4px #fff);
 }
+
+/* Negative cycle found by Bellman-Ford — pulsing red glow */
+.edge-cycle line {
+    stroke: #ef4444;
+    stroke-width: 3;
+    animation: cycle-pulse 1.2s ease-in-out infinite;
+}
+
+.edge-cycle .edge-weight {
+    fill: #fca5a5;
+}
+
+@keyframes cycle-pulse {
+    0%, 100% { filter: drop-shadow(0 0 2px #ef4444); }
+    50%      { filter: drop-shadow(0 0 10px #ef4444); }
+}

@@ -85,7 +85,52 @@ function test_4() {
 }
 
 
+function test_5() {
+    const graph = new Graph(true);
+
+    graph.addNode(0, 0);
+    graph.addNode(1, 1);
+    graph.addNode(2, 2);
+
+    graph.addEdge(0, 1, 1);
+    graph.addEdge(1, 2, -3);
+    graph.addEdge(2, 0, 0);
+
+    const { negativeCycle, cycleEdges, cycleNodes } = bellman_ford(graph, 0);
+
+    assert(negativeCycle === true, "Directed negative cycle should be detected");
+    assert(cycleEdges.length === 3, "Cycle should contain 3 edges");
+    assert(cycleEdges.every(e => graph.edges.includes(e)), "Cycle edges must reference stored edges");
+    assert(cycleNodes.length === 3, "Cycle should contain 3 nodes");
+    const total = cycleEdges.reduce((sum, e) => sum + e.weight, 0);
+    assert(total < 0, "Cycle total weight must be negative");
+    console.log("Bellman Ford Directed Cycle Extraction Test Succesful!");
+}
+
+
+function test_6() {
+    const graph = new Graph();
+
+    graph.addNode(0, 0);
+    graph.addNode(1, 1);
+    graph.addNode(2, 2);
+
+    graph.addEdge(0, 1, 1);
+    graph.addEdge(1, 2, -3);
+
+    const { negativeCycle, cycleEdges } = bellman_ford(graph, 0);
+
+    assert(negativeCycle === true, "Undirected negative edge forms a 2-cycle");
+    assert(cycleEdges.length === 2, "Undirected 2-cycle should contain 2 edges");
+    const total = cycleEdges.reduce((sum, e) => sum + e.weight, 0);
+    assert(total < 0, "Cycle total weight must be negative");
+    console.log("Bellman Ford Undirected Cycle Extraction Test Succesful!");
+}
+
+
 test_1();
 test_2();
 test_3();
 test_4();
+test_5();
+test_6();
