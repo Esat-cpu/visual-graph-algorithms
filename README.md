@@ -2,10 +2,7 @@
 
 An interactive graph algorithm visualizer built with Vanilla JS and D3.js.
 
-![Prim's Algorithm](screenshots/prim_example.png)
-
 ---
-
 
 ## Algorithms
 
@@ -16,20 +13,31 @@ An interactive graph algorithm visualizer built with Vanilla JS and D3.js.
 | **Prim** | Minimum Spanning Tree | Builds an MST by greedily adding the cheapest edge from the visited set |
 | **Kruskal** | Minimum Spanning Tree | Builds an MST by sorting all edges and adding them without creating cycles |
 
-## Usage
+## Building a Graph
 
-### Building a Graph
 - **Left click** on the canvas to add a node
 - **Right drag** from one node to another to add an edge (you'll be prompted for a weight)
 - **Right drag** between two already-connected nodes to remove the edge
 - **Right click** a node to remove it
 - **Left drag** a node to reposition it
 
+### Mobile / Touch Devices
+
+On touch screens the interaction model changes to be safe and simple:
+
+- **Tap** the canvas to add a node.
+- **Tap a node, then tap another node** to connect them with an edge.
+- Tapping an edge that already exists opens its weight dialog, which now also has a **REMOVE EDGE** button.
+- **Long-press a node** (600 ms) until a red bubble appears, then confirm to delete it.
+- Tapping empty canvas clears the current selection.
+
 ### Graph Mode
+
 - **UNDIRECTED** (default): an edge works both ways with a single weight.
 - **DIRECTED**: drag from node A to node B to create an A→B edge. Each direction can have its own weight, so A→B and B→A can coexist. Edge direction is shown with an arrow.
 
 ### Running an Algorithm
+
 1. Select an algorithm from the top bar
 2. For Dijkstra, Bellman-Ford, and Prim — enter a start node ID
 3. Click **RUN**
@@ -38,6 +46,7 @@ An interactive graph algorithm visualizer built with Vanilla JS and D3.js.
 > **Note:** Prim and Kruskal require a connected undirected graph.
 
 ### Playback Controls
+
 While an algorithm animates, the top bar shows a **SPEED** slider (0.25×–8×, default 1×). It can be changed live — the new speed takes effect on the very next step.
 
 A playback bar appears below the top bar while an animation runs and stays open afterwards so you can review and rewind:
@@ -47,6 +56,13 @@ A playback bar appears below the top bar while an animation runs and stays open 
 - The **RUN** button turns into **■ STOP** while an animation plays; click it to cancel.
 
 Editing the graph, switching algorithm or mode, or clearing hides the playback bar and resets the session.
+
+## Save and Load
+
+- **⬇ EXPORT** saves the current graph to a JSON file on your computer (`graph-undirected.json` or `graph-directed.json`).
+- **⬆ IMPORT** loads a graph from a JSON file. If that workspace already has a graph you'll be asked to confirm first, and if the file's mode differs from the active one the app switches to the matching workspace.
+
+Files use the `vga` format: `{ format, version, directed, nodeIdCounter, nodes, edges }`.
 
 ## Running Locally
 
@@ -61,10 +77,9 @@ Then open `http://localhost:8000` in your browser. Dependencies are served from 
 
 | Command | Description |
 |---------|-------------|
-| `npm test` | Run all algorithm tests |
+| `npm test` | Run all algorithm and UI tests |
 | `npm run serve` | Start a local server at `http://localhost:8000` |
 | `npm run check` | Syntax-check every JS file |
-
 
 ## Stack
 
