@@ -563,9 +563,18 @@ function showWeightModal() {
     if (locked) return;
     const modal = document.getElementById("weight-modal");
     const input = document.getElementById("weight-input");
+    const removeBtn = document.getElementById("weight-remove");
     modal.classList.add("show");
     input.value = "";
     input.focus();
+
+    // When the pending edge already exists, offer REMOVE EDGE instead of
+    // creating a duplicate (tap-tap on mobile re-opens the modal for it).
+    if (removeBtn) {
+        const exists = pendingEdge &&
+            graph.hasEdge(pendingEdge.source, pendingEdge.target);
+        removeBtn.hidden = !exists;
+    }
 }
 
 function hideWeightModal() {
@@ -588,6 +597,22 @@ document.getElementById("weight-confirm").addEventListener("click", () => {
 });
 
 document.getElementById("weight-cancel").addEventListener("click", hideWeightModal);
+
+// REMOVE EDGE — shown only when the pending edge already exists. Mirrors the
+// right-drag removal logic: directed graphs drop only the dragged orientation,
+// undirected graphs drop the pair.
+document.getElementById("weight-remove").addEventListener("click", () => {
+    if (!pendingEdge) return;
+    graph.edges = graph.edges.filter(e => {
+        if (graph.directed)
+            return !(e.source === pendingEdge.source && e.target === pendingEdge.target);
+        return !(e.source === pendingEdge.source && e.target === pendingEdge.target) &&
+               !(e.source === pendingEdge.target && e.target === pendingEdge.source);
+    });
+    hideWeightModal();
+    stopAnimation();
+    render();
+});
 
 // Enter key to confirm
 document.getElementById("weight-input").addEventListener("keydown", e => {

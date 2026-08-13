@@ -512,6 +512,12 @@ body {
 #weight-cancel { background: var(--bg-surface); color: var(--text-muted); border: 1px solid var(--border); }
 #weight-cancel:hover { color: var(--text-primary); }
 
+/* REMOVE EDGE (shown only when the pending edge exists). Uses the hidden
+   attribute (not the .hidden class, which keeps the box in the flex row). */
+#weight-remove { background: #ef4444; color: #fff; }
+#weight-remove:hover { background: #b91c1c; }
+#weight-remove[hidden] { display: none; }
+
 /* ── SVG elements ── */
 .node circle {
     stroke-width: 2;
@@ -649,5 +655,83 @@ body {
 
     .topbar-divider {
         display: none;
+    }
+}
+
+/* ── TOUCH / MOBILE ──
+   Node currently tapped for a connection — bright ring so the state is
+   obvious even without a hover cursor. */
+.node-selected circle {
+    stroke: #fff;
+    stroke-width: 3;
+    filter: drop-shadow(0 0 6px #3b82f6);
+}
+
+/* Red confirm bubble floating over a long-pressed node. Positioned with
+   left/top because it lives in the graph container whose coordinates match
+   the SVG user units (the SVG has no viewBox). */
+.node-delete-bubble {
+    position: absolute;
+    z-index: 50;
+    transform: translate(-50%, -130%);
+    padding: 6px 12px;
+    background: #ef4444;
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+    touch-action: manipulation;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+
+/* Little tail pointing at the node below. */
+.node-delete-bubble::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: #ef4444;
+}
+
+/* Result panel as a bottom sheet on narrow screens: collapsed to a peek
+   header by default, expanded by tapping the header. */
+@media (max-width: 900px) {
+    #result-panel.bottom-sheet {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        height: 42vh;
+        border-left: none;
+        border-top: 1px solid var(--border);
+        z-index: 40;
+        transform: translateY(calc(100% - 38px));
+        transition: transform 0.25s ease;
+    }
+
+    #result-panel.bottom-sheet.open {
+        transform: translateY(0);
+    }
+
+    #result-panel.bottom-sheet #result-panel-header {
+        cursor: pointer;
+        user-select: none;
+    }
+}
+
+/* Small phones: drop the legend, make the weight modal full-width. */
+@media (max-width: 640px) {
+    #legend { display: none; }
+
+    #weight-modal-box {
+        width: calc(100% - 32px);
+        margin-bottom: 8vh;
     }
 }
