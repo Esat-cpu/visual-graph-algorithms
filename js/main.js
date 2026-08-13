@@ -18,6 +18,7 @@ let dragStartX = 0;
 let dragStartY = 0;
 let currentInterval = null;
 let currentParents = null;
+let renderHandle = null;
 
 const NODE_SIZE = 24;
 const MIN_DISTANCE = 75;
@@ -62,7 +63,10 @@ function resetVisuals() {
 // Compute line endpoints + weight label position for one edge.
 // Bidirectional pairs (A→B and B→A in directed mode) are pushed apart
 // symmetrically so the two edges and their labels do not overlap.
-function edgeGeometry(e) {
+// `reverseKeys` lists "source-target" keys for every directed edge that has a
+// counterpart in the opposite direction; it is built once per render so this
+// check stays O(1) per edge instead of rescanning all edges.
+function edgeGeometry(e, reverseKeys) {
     const a = graph.getNode(e.source);
     const b = graph.getNode(e.target);
 
@@ -76,7 +80,7 @@ function edgeGeometry(e) {
     // Reverse edges sit on opposite sides; the perpendicular of opposite
     // directions already flips, so a constant side is enough.
     let side = 0;
-    if (graph.directed && graph.edges.some(x => x.source === e.target && x.target === e.source)) {
+    if (graph.directed && reverseKeys.has(e.source + "-" + e.target)) {
         side = 1;
     }
 
@@ -94,9 +98,7 @@ function edgeGeometry(e) {
         ox: nx, oy: ny,                         // perpendicular offset
         midX: (a.x + b.x) / 2, midY: (a.y + b.y) / 2,
         x1: a.x + ux * R + nx, y1: a.y + uy * R + ny,
-        x2: b.x - ux * R + nx, y2: b.y - uy * R + ny,
-        lx: (a.x + b.x) / 2 + nx,               // label sits on the offset line
-        ly: (a.y + b.y) / 2 + ny - 8
+        x2: b.x - ux * R + nx, y2: b.y - uy * R + ny
     };
 }
 
@@ -114,6 +116,32 @@ const LABEL_CHAR_W = 8.4;        // JetBrains Mono 14px ≈ 0.6 × font-size
 const LABEL_H = 16;              // label box height used for collision tests
 const LABEL_GAP = 4;             // minimum gap between two label boxes
 const LABEL_T_LIMIT = 0.25;      // keep labels in the middle of the line
+
+// Candidate spots used to be checked against every already-placed label and
+// every node — O(E²) work repeated on each mouse move during a drag. A uniform
+// grid fixes that: every box is registered in each cell it touches, so two
+// intersecting boxes always share a cell, and a candidate only needs to look
+// at the boxes in its own cells.
+const GRID_CELL = 64;
+
+function gridInsert(cells, box) {
+    for (let cx = Math.floor(box.x / GRID_CELL); cx <= Math.floor((box.x + box.w) / GRID_CELL); cx++)
+        for (let cy = Math.floor(box.y / GRID_CELL); cy <= Math.floor((box.y + box.h) / GRID_CELL); cy++) {
+            const key = cx + "," + cy;
+            (cells.get(key) || cells.set(key, []).get(key)).push(box);
+        }
+}
+
+// Boxes that share a cell with `box` — every possible collision lives there.
+function gridNearby(cells, box) {
+    const nearby = [];
+    for (let cx = Math.floor(box.x / GRID_CELL); cx <= Math.floor((box.x + box.w) / GRID_CELL); cx++)
+        for (let cy = Math.floor(box.y / GRID_CELL); cy <= Math.floor((box.y + box.h) / GRID_CELL); cy++) {
+            const list = cells.get(cx + "," + cy);
+            if (list) for (let i = 0; i < list.length; ++i) nearby.push(list[i]);
+        }
+    return nearby;
+}
 
 // Candidate label spots, ordered best-first:
 // 1) the midpoint, then sliding along the line — the label stays attached to
@@ -140,21 +168,20 @@ function boxesIntersect(a, b) {
            a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
-// True when the label box would cover any node circle (incl. its own ends).
-function overlapsNode(box) {
-    const size = NODE_SIZE * 2;
-    return graph.nodes.some(n =>
-        boxesIntersect(box, { x: n.x - size / 2, y: n.y - size / 2, w: size, h: size }));
-}
-
 // Compute a collision-free position for every edge's weight label.
 // Returns a Map keyed by "source-target" → { x, y }.
-function placeWeightLabels() {
-    const placed = [];
+function placeWeightLabels(geometry) {
+    // Node circles and placed labels share one grid, so a candidate spot only
+    // needs to check its local neighbourhood instead of every label + node.
+    const cells = new Map();
+    graph.nodes.forEach(n => gridInsert(cells, {
+        x: n.x - NODE_SIZE, y: n.y - NODE_SIZE,
+        w: NODE_SIZE * 2, h: NODE_SIZE * 2
+    }));
 
     // Shorter edges are processed first so they keep the midpoint.
     const order = [...graph.edges]
-        .map(e => ({ e, g: edgeGeometry(e) }))
+        .map(e => ({ e, g: geometry.get(e) }))
         .sort((a, b) => a.g.len - b.g.len);
 
     const result = new Map();
@@ -174,14 +201,13 @@ function placeWeightLabels() {
             const box = { x: x - w / 2, y: y - h / 2, w, h };
 
             // Reject spots that collide with another label or with a node
-            if (placed.some(p => boxesIntersect(p, box))) continue;
-            if (overlapsNode(box)) continue;
+            if (gridNearby(cells, box).some(b => boxesIntersect(b, box))) continue;
 
             best = { x, y };
             break;
         }
 
-        placed.push({
+        gridInsert(cells, {
             x: best.x - w / 2, y: best.y - h / 2, w, h
         });
         result.set(`${e.source}-${e.target}`, best);
@@ -206,9 +232,18 @@ function flashStatus(message) {
 
 // ── RENDER ──
 function render() {
+    // Edge geometry depends only on node positions, so it is computed once per
+    // render and shared by the label placement and the line drawing below —
+    // not recomputed five times per edge on every mouse move.
+    const edgeKeys = new Set(graph.edges.map(e => `${e.source}-${e.target}`));
+    const reverseKeys = new Set(graph.edges
+        .filter(e => edgeKeys.has(`${e.target}-${e.source}`))
+        .map(e => `${e.source}-${e.target}`));
+    const geometry = new Map(graph.edges.map(e => [e, edgeGeometry(e, reverseKeys)]));
+
     // Compute a collision-free spot for every weight label once, so all
     // edges agree on the layout before any of them draws.
-    const labelPositions = placeWeightLabels();
+    const labelPositions = placeWeightLabels(geometry);
 
     // Edges
     const edgeGroups = edgesLayer.selectAll(".edge")
@@ -221,10 +256,10 @@ function render() {
         });
 
     edgeGroups.select("line")
-        .attr("x1", e => edgeGeometry(e).x1)
-        .attr("y1", e => edgeGeometry(e).y1)
-        .attr("x2", e => edgeGeometry(e).x2)
-        .attr("y2", e => edgeGeometry(e).y2)
+        .attr("x1", e => geometry.get(e).x1)
+        .attr("y1", e => geometry.get(e).y1)
+        .attr("x2", e => geometry.get(e).x2)
+        .attr("y2", e => geometry.get(e).y2)
         .attr("stroke", "#666666")
         .attr("stroke-width", 2)
         // Arrows only make sense in directed mode
@@ -287,6 +322,17 @@ const dragLine = svg.append("line")
 
 
 // ── NODE DRAG ──
+// Full renders are deferred to the next animation frame, so several mousemove
+// events that fall into the same frame coalesce into one update. Structural
+// changes (node/edge add, remove, mode switch) still render synchronously.
+function queueRender() {
+    if (renderHandle != null) return;
+    renderHandle = requestAnimationFrame(() => {
+        renderHandle = null;
+        render();
+    });
+}
+
 const drag = d3.drag()
     .on("start", function() {})
     .on("drag", function(event, d) {
@@ -298,13 +344,15 @@ const drag = d3.drag()
             return Math.sqrt(dx*dx + dy*dy) < MIN_DISTANCE;
         });
         if (tooClose) {
+            // Drop the pending re-render so it cannot repaint the node blue
+            if (renderHandle != null) { cancelAnimationFrame(renderHandle); renderHandle = null; }
             d3.select(this).select("circle").attr("fill", "#ef4444");
             return;
         }
         d3.select(this).select("circle").attr("fill", "#3b82f6");
         d.x = event.x;
         d.y = event.y;
-        render();
+        queueRender();
     })
     .on("end", function() {
         d3.select(this).select("circle").attr("fill", "#3b82f6");
