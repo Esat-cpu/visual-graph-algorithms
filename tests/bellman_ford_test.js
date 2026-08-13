@@ -47,5 +47,45 @@ function test_2() {
 }
 
 
+function test_3() {
+    const graph = new Graph(true);
+
+    graph.addNode(0, 0);
+    graph.addNode(1, 1);
+    graph.addNode(2, 2);
+
+    graph.addEdge(0, 1, 1);
+    graph.addEdge(1, 2, -3);
+    graph.addEdge(2, 0, 0);
+
+    const { negativeCycle } = bellman_ford(graph, 0);
+
+    assert(negativeCycle === true, "Directed negative cycle should be detected");
+    console.log("Bellman Ford Directed Negative Cycle Test Succesful!");
+}
+
+
+function test_4() {
+    const graph = new Graph(true);
+
+    graph.addNode(0, 0);
+    graph.addNode(1, 1);
+    graph.addNode(2, 2);
+
+    graph.addEdge(0, 1, -2);
+    graph.addEdge(1, 2, 3);
+
+    const { negativeCycle, steps } = bellman_ford(graph, 0);
+    const lastDistList = steps[steps.length - 1].distance;
+
+    assert(negativeCycle === false, "No cycle, no false positive");
+    assert(lastDistList[1] === -2, "Negative edge respected");
+    assert(lastDistList[2] === 1, "Chain through negative edge");
+    console.log("Bellman Ford Directed No-Cycle Test Succesful!");
+}
+
+
 test_1();
 test_2();
+test_3();
+test_4();

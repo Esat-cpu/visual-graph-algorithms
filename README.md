@@ -25,13 +25,17 @@ An interactive graph algorithm visualizer built with Vanilla JS and D3.js.
 - **Right click** a node to remove it
 - **Left drag** a node to reposition it
 
+### Graph Mode
+- **UNDIRECTED** (default): an edge works both ways with a single weight.
+- **DIRECTED**: drag from node A to node B to create an A→B edge. Each direction can have its own weight, so A→B and B→A can coexist. Edge direction is shown with an arrow.
+
 ### Running an Algorithm
 1. Select an algorithm from the top bar
 2. For Dijkstra, Bellman-Ford, and Prim — enter a start node ID
 3. Click **RUN**
 4. After the animation completes, click a node in the output panel to highlight its shortest path
 
-> **Note:** Prim and Kruskal require a connected graph.
+> **Note:** Prim and Kruskal require a connected undirected graph.
 
 ## Running Locally
 

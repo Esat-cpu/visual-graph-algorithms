@@ -23,6 +23,13 @@
 
         <div class="topbar-divider"></div>
 
+        <div id="graph-mode-group">
+            <button id="mode-undirected" class="mode-btn active">UNDIRECTED</button>
+            <button id="mode-directed" class="mode-btn">DIRECTED</button>
+        </div>
+
+        <div class="topbar-divider"></div>
+
         <div id="start-node-group">
             <label>START</label>
             <input id="start-node-input" type="number" min="0" placeholder="id" />
@@ -44,8 +51,8 @@
 
             <svg id="graph-svg">
                 <defs>
-                    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-                        <polygon points="0 0, 8 3, 0 6" fill="#555" />
+                    <marker id="arrowhead" markerWidth="16" markerHeight="12" refX="14" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+                        <polygon points="0 0, 14 6, 0 12" fill="#666666" />
                     </marker>
                 </defs>
                 <g id="edges-layer"></g>

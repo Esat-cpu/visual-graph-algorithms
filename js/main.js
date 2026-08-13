@@ -1,6 +1,12 @@
 "use strict";
 
-const graph = new Graph();
+// Two independent workspaces so switching modes never converts or loses edges.
+// `graph` always points at the active one; the rest of the code reads it.
+const workspaces = {
+    undirected: new Graph(),        // edges connect both ways
+    directed: new Graph(true)       // edges only usable in source→target order
+};
+let graph = workspaces.undirected;
 const svg = d3.select("#graph-svg");
 const edgesLayer = svg.select("#edges-layer");
 const nodesLayer = svg.select("#nodes-layer");
@@ -15,6 +21,7 @@ let currentParents = null;
 
 const NODE_SIZE = 24;
 const MIN_DISTANCE = 75;
+const EDGE_OFFSET = 10;
 
 
 
@@ -42,11 +49,63 @@ function isConnected() {
 }
 
 
+// Clear any algorithm highlights and restore the default node/edge colors
 function resetVisuals() {
     currentParents = null;
     nodesLayer.selectAll(".node").select("circle").attr("fill", "#3b82f6");
     edgesLayer.selectAll(".edge").classed("edge-active", false);
     edgesLayer.selectAll(".edge").select("line").attr("stroke", "#666666").attr("stroke-width", 2);
+}
+
+
+// Compute line endpoints + weight label position for one edge.
+// Bidirectional pairs (A→B and B→A in directed mode) are pushed apart
+// symmetrically so the two edges and their labels do not overlap.
+function edgeGeometry(e) {
+    const a = graph.getNode(e.source);
+    const b = graph.getNode(e.target);
+
+    // Direction unit vector from a to b
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.sqrt(dx*dx + dy*dy) || 1;
+    const ux = dx / len;
+    const uy = dy / len;
+
+    // Reverse edges sit on opposite sides; the perpendicular of opposite
+    // directions already flips, so a constant side is enough.
+    let side = 0;
+    if (graph.directed && graph.edges.some(x => x.source === e.target && x.target === e.source)) {
+        side = 1;
+    }
+
+    // Perpendicular offset vector (perpendicular to the a→b direction)
+    const nx = (-dy / len) * EDGE_OFFSET * side;
+    const ny = (dx / len) * EDGE_OFFSET * side;
+
+    // Stop the line at the node boundary so the arrowhead is not hidden
+    // under the node circle.
+    const R = NODE_SIZE;
+
+    return {
+        x1: a.x + ux * R + nx, y1: a.y + uy * R + ny,
+        x2: b.x - ux * R + nx, y2: b.y - uy * R + ny,
+        lx: (a.x + b.x) / 2 + nx,               // label sits on the offset line
+        ly: (a.y + b.y) / 2 + ny - 8
+    };
+}
+
+
+// Briefly show a red message in the bottom status bar, then restore it
+function flashStatus(message) {
+    const statusEl = document.querySelector(".status-item:last-child");
+    const original = statusEl.textContent;
+    statusEl.textContent = message;
+    statusEl.style.color = "#ef4444";
+    setTimeout(() => {
+        statusEl.textContent = original;
+        statusEl.style.color = "";
+    }, 3000);
 }
 
 
@@ -63,16 +122,18 @@ function render() {
         });
 
     edgeGroups.select("line")
-        .attr("x1", e => graph.getNode(e.source).x)
-        .attr("y1", e => graph.getNode(e.source).y)
-        .attr("x2", e => graph.getNode(e.target).x)
-        .attr("y2", e => graph.getNode(e.target).y)
+        .attr("x1", e => edgeGeometry(e).x1)
+        .attr("y1", e => edgeGeometry(e).y1)
+        .attr("x2", e => edgeGeometry(e).x2)
+        .attr("y2", e => edgeGeometry(e).y2)
         .attr("stroke", "#666666")
-        .attr("stroke-width", 2);
+        .attr("stroke-width", 2)
+        // Arrows only make sense in directed mode
+        .attr("marker-end", graph.directed ? "url(#arrowhead)" : null);
 
     edgeGroups.select("text")
-        .attr("x", e => (graph.getNode(e.source).x + graph.getNode(e.target).x) / 2)
-        .attr("y", e => (graph.getNode(e.source).y + graph.getNode(e.target).y) / 2 - 8)
+        .attr("x", e => edgeGeometry(e).lx)
+        .attr("y", e => edgeGeometry(e).ly)
         .text(e => e.weight);
 
     // Nodes
@@ -173,12 +234,17 @@ d3.select("#graph-container")
         });
 
         if (targetNode) {
-            // Edge add/remove
+            // Edge add/remove. Dragging an existing edge removes it; dragging
+            // a missing one opens the weight prompt to create it.
             if (graph.hasEdge(dragSource.id, targetNode.id)) {
-                graph.edges = graph.edges.filter(e =>
-                    !(e.source === dragSource.id && e.target === targetNode.id) &&
-                    !(e.source === targetNode.id && e.target === dragSource.id)
-                );
+                // Directed: only the dragged direction is removed, so a
+                // bidirectional pair can keep the opposite edge.
+                graph.edges = graph.edges.filter(e => {
+                    if (graph.directed)
+                        return !(e.source === dragSource.id && e.target === targetNode.id);
+                    return !(e.source === dragSource.id && e.target === targetNode.id) &&
+                           !(e.source === targetNode.id && e.target === dragSource.id);
+                });
                 resetVisuals();
                 render();
             } else {
@@ -236,6 +302,9 @@ function hideWeightModal() {
 }
 
 document.getElementById("weight-confirm").addEventListener("click", () => {
+    // Any numeric weight is allowed (including negative and zero) — Dijkstra
+    // and Bellman-Ford demonstrate their behavior with them, and Prim/Kruskal
+    // are unaffected by the sign.
     const weight = parseFloat(document.getElementById("weight-input").value);
     if (isNaN(weight)) {
         hideWeightModal();
@@ -285,21 +354,36 @@ document.querySelectorAll(".algo-btn").forEach(btn => {
 });
 
 
+// ── GRAPH MODE SWITCH ──
+// Point `graph` at the chosen workspace and redraw. Each workspace keeps its
+// own nodes/edges untouched, so switching back restores the exact same state.
+function switchWorkspace(name) {
+    graph = workspaces[name];
+    document.querySelectorAll(".mode-btn").forEach(b => {
+        b.classList.toggle("active", b.id === `mode-${name}`);
+    });
+    stopAnimation();
+    resetVisuals();
+    render();
+}
+
+document.getElementById("mode-undirected").addEventListener("click", () => switchWorkspace("undirected"));
+document.getElementById("mode-directed").addEventListener("click", () => switchWorkspace("directed"));
+
+
 // ── RUN BUTTON ──
 document.getElementById("run-btn").addEventListener("click", () => {
     if (graph.nodes.length === 0) return;
     resetVisuals();
 
     if (activeAlgo === "prim" || activeAlgo === "kruskal") {
+        // MST is only defined on undirected graphs — warn in the result panel
+        if (graph.directed) {
+            showResultWarning("⚠ MST requires an undirected graph — switch to UNDIRECTED");
+            return;
+        }
         if (!isConnected()) {
-            const statusEl = document.querySelector(".status-item:last-child");
-            const original = statusEl.textContent;
-            statusEl.textContent = "⚠ Graph is not connected — Prim and Kruskal require a connected graph";
-            statusEl.style.color = "#ef4444";
-            setTimeout(() => {
-                statusEl.textContent = original;
-                statusEl.style.color = "";
-            }, 3000);
+            flashStatus("⚠ Graph is not connected — Prim and Kruskal require a connected graph");
             return;
         }
     }
@@ -542,12 +626,21 @@ function highlightPath(targetId) {
         .select("circle")
         .attr("fill", n => path.includes(n.id) ? "#10b981" : "#3b82f6");
 
+    // `path` is rebuilt from the target back to the source, so the edge
+    // between path[i+1] and path[i] is traversed from path[i+1] → path[i].
     edgesLayer.selectAll(".edge")
         .classed("edge-active", e => {
             for (let i = 0; i < path.length - 1; i++) {
-                if ((e.source === path[i] && e.target === path[i+1]) ||
-                    (e.source === path[i+1] && e.target === path[i]))
-                    return true;
+                const from = path[i + 1];
+                const to = path[i];
+
+                // Directed edges must match the exact traversal direction —
+                // otherwise a bidirectional pair would light up both arrows.
+                if (e.source === from && e.target === to) return true;
+
+                // Undirected edges are stored in an arbitrary orientation,
+                // so also accept the reverse (only one exists per pair).
+                if (!graph.directed && e.source === to && e.target === from) return true;
             }
             return false;
         });
@@ -555,22 +648,20 @@ function highlightPath(targetId) {
 
 
 // ── RESULTS ──
-function showNegativeCycleWarning() {
+// Show a warning message in the result panel (right side)
+function showResultWarning(message) {
     const content = document.getElementById("result-content");
     content.innerHTML = "";
     const warning = document.createElement("p");
     warning.className = "result-empty result-warning";
-    warning.textContent = "⚠ Negative cycle detected — no shortest path exists";
+    warning.textContent = message;
     content.appendChild(warning);
+}
 
-    const statusEl = document.querySelector(".status-item:last-child");
-    const original = statusEl.textContent;
-    statusEl.textContent = "⚠ Negative cycle detected — no shortest path exists";
-    statusEl.style.color = "#ef4444";
-    setTimeout(() => {
-        statusEl.textContent = original;
-        statusEl.style.color = "";
-    }, 3000);
+
+function showNegativeCycleWarning() {
+    showResultWarning("⚠ Negative cycle detected — no shortest path exists");
+    flashStatus("⚠ Negative cycle detected — no shortest path exists");
 }
 
 

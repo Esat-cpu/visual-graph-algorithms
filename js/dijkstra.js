@@ -1,6 +1,8 @@
 "use strict";
 
 
+// Dijkstra finds the shortest path from startId to every other node.
+// It requires non-negative edge weights; for negative weights use Bellman-Ford.
 function dijkstra(graph, startId) {
     const steps = [];
     const parents = {};
@@ -9,8 +11,10 @@ function dijkstra(graph, startId) {
     const visited = {};
     const remaining = new Set(graph.nodes.map(n => n.id));
 
+    // parents[n] records the previous node on the shortest path to n
     graph.nodes.forEach(n => parents[n.id] = null);
 
+    // Start unreachable nodes at infinity so the first update wins
     graph.nodes.forEach(n => distance[n.id] = Infinity);
     distance[startId] = 0;
 
@@ -18,6 +22,7 @@ function dijkstra(graph, startId) {
 
 
     while (remaining.size > 0) {
+        // Pick the unvisited node with the smallest known distance (greedy step)
         let current = null;
 
         remaining.forEach(id => {
@@ -29,16 +34,21 @@ function dijkstra(graph, startId) {
         visited[current] = true;
 
 
-        const neighbours = graph.getNeighbours(current);
+        // Relax: if going through `from` gives a shorter path to `to`, update it
+        const relax = (from, to, weight) => {
+            const newDist = weight + distance[from];
 
-        neighbours.forEach(neighbourId => {
-            const edge = graph.edgeBetween(neighbourId, current);
-            const newDist = edge.weight + distance[current];
-
-            if (newDist < distance[neighbourId]) {
-                distance[neighbourId] = newDist;
-                parents[neighbourId] = current;
+            if (newDist < distance[to]) {
+                distance[to] = newDist;
+                parents[to] = from;
             }
+        };
+
+        // Undirected edges work both ways, so relax both orientations;
+        // directed edges are only usable in their stored source→target direction
+        graph.edges.forEach(e => {
+            relax(e.source, e.target, e.weight);
+            if (!graph.directed) relax(e.target, e.source, e.weight);
         });
 
         steps.push({ current, distance: {...distance}, visited: {...visited} });

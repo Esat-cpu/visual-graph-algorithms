@@ -91,6 +91,37 @@ body {
 
 .algo-btn.active + .algo-btn { border-left-color: var(--accent); }
 
+.mode-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    padding: 6px 14px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    border-right: none;
+}
+
+.mode-btn:first-of-type { border-radius: 4px 0 0 4px; }
+.mode-btn:last-of-type { border-radius: 0 4px 4px 0; border-right: 1px solid var(--border); }
+
+.mode-btn:hover {
+    background: var(--bg-panel);
+    color: var(--text-primary);
+}
+
+.mode-btn.active {
+    background: var(--accent-glow);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.mode-btn.active + .mode-btn { border-left-color: var(--accent); }
+
 .topbar-divider {
     width: 1px;
     height: 24px;
