@@ -237,7 +237,7 @@ function hideWeightModal() {
 
 document.getElementById("weight-confirm").addEventListener("click", () => {
     const weight = parseFloat(document.getElementById("weight-input").value);
-    if (isNaN(weight) || weight <= 0) {
+    if (isNaN(weight)) {
         hideWeightModal();
         return;
     }
@@ -318,8 +318,8 @@ document.getElementById("run-btn").addEventListener("click", () => {
             const { steps, parents } = dijkstra(graph, startId);
             animateDijkstra(steps, parents);
         } else if (activeAlgo === "bellman-ford") {
-            const { steps, parents } = bellman_ford(graph, startId);
-            animateBellmanFord(steps, parents);
+            const { steps, parents, negativeCycle } = bellman_ford(graph, startId);
+            animateBellmanFord(steps, parents, negativeCycle);
         } else if (activeAlgo === "prim") {
             const { steps, mst } = prim(graph, startId);
             animatePrim(steps, mst);
@@ -397,7 +397,7 @@ function animateDijkstra(steps, parents) {
 
 
 // ── ANIMATE BELLMAN-FORD ──
-function animateBellmanFord(steps, parents) {
+function animateBellmanFord(steps, parents, negativeCycle) {
     stopAnimation();
     startLock();
 
@@ -410,7 +410,11 @@ function animateBellmanFord(steps, parents) {
             nodesLayer.selectAll(".node").select("circle").attr("fill", "#3b82f6");
             currentParents = parents;
             stopLock();
-            showShortestPathResult(steps[steps.length - 1].distance, parents);
+            if (negativeCycle) {
+                showNegativeCycleWarning();
+            } else {
+                showShortestPathResult(steps[steps.length - 1].distance, parents);
+            }
             return;
         }
 
@@ -551,6 +555,25 @@ function highlightPath(targetId) {
 
 
 // ── RESULTS ──
+function showNegativeCycleWarning() {
+    const content = document.getElementById("result-content");
+    content.innerHTML = "";
+    const warning = document.createElement("p");
+    warning.className = "result-empty result-warning";
+    warning.textContent = "⚠ Negative cycle detected — no shortest path exists";
+    content.appendChild(warning);
+
+    const statusEl = document.querySelector(".status-item:last-child");
+    const original = statusEl.textContent;
+    statusEl.textContent = "⚠ Negative cycle detected — no shortest path exists";
+    statusEl.style.color = "#ef4444";
+    setTimeout(() => {
+        statusEl.textContent = original;
+        statusEl.style.color = "";
+    }, 3000);
+}
+
+
 function showShortestPathResult(distance, parents) {
     const content = document.getElementById("result-content");
 

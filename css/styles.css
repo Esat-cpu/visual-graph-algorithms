@@ -251,6 +251,10 @@ body {
     line-height: 1.8;
 }
 
+.result-warning {
+    color: #ef4444;
+}
+
 .result-section-title {
     font-family: 'JetBrains Mono', monospace;
     font-size: 10px;

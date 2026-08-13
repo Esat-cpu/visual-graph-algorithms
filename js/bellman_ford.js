@@ -39,7 +39,15 @@ function bellman_ford(graph, startId) {
         if (!updated) break;
     }
 
-    return { steps, parents };
+    let negativeCycle = false;
+    graph.edges.forEach(e => {
+        if (distance[e.target] > distance[e.source] + e.weight ||
+            distance[e.source] > distance[e.target] + e.weight) {
+            negativeCycle = true;
+        }
+    });
+
+    return { steps, parents, negativeCycle };
 }
 
 if (typeof module !== 'undefined') module.exports = { bellman_ford };
