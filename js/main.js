@@ -8,8 +8,11 @@ const workspaces = {
 };
 let graph = workspaces.undirected;
 const svg = d3.select("#graph-svg");
-const edgesLayer = svg.select("#edges-layer");
-const nodesLayer = svg.select("#nodes-layer");
+// Layers live inside a transformed <g id="viewport"> so node/edge coordinates
+// stay in graph space while zoom/pan only changes that group's transform.
+const viewport = svg.select("#viewport");
+const edgesLayer = viewport.select("#edges-layer");
+const nodesLayer = viewport.select("#nodes-layer");
 
 let locked = false;
 let dragSource = null;
@@ -18,6 +21,9 @@ let dragStartX = 0;
 let dragStartY = 0;
 let currentParents = null;
 let renderHandle = null;
+// Set when the user pans with the mouse so the synthetic click after the drag
+// doesn't drop a new node onto the canvas.
+let panJustMoved = false;
 
 // Shared animation engine: all four algorithms feed their precomputed `steps`
 // into this one playback object, so speed changes, stop, seek and reverse all
@@ -31,8 +37,11 @@ let currentBaseDelay = 0;
 // Speed multiplier from the slider (0.25× … 8×, default 1×).
 let currentSpeed = 1;
 
-const NODE_SIZE = 24;
-const MIN_DISTANCE = 75;
+// Touch devices need larger touch targets and roomier node spacing.
+const isTouch = (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) ||
+                ("ontouchstart" in window);
+const NODE_SIZE = isTouch ? 30 : 24;
+const MIN_DISTANCE = isTouch ? 90 : 75;
 const EDGE_OFFSET = 10;
 
 
@@ -437,12 +446,40 @@ function render() {
 }
 
 // ── DRAG LINE (temporary line while dragging) ──
-const dragLine = svg.append("line")
+// Lives inside #viewport so its endpoints stay in graph coordinates.
+const dragLine = viewport.append("line")
     .attr("class", "drag-line")
     .attr("stroke", "#3b82f6")
     .attr("stroke-width", 2)
     .attr("stroke-dasharray", "6,3")
     .attr("opacity", 0);
+
+
+// ── ZOOM / PAN ──
+// d3.zoom handles the wheel (desktop), pinch (touch) and mouse-drag panning.
+// The transform is applied to #viewport only; every coordinate conversion
+// below goes through d3.pointer(event, viewport.node()) so it lands in graph
+// space. Pointer-down on a node is excluded so node dragging keeps priority.
+const zoom = d3.zoom()
+    .scaleExtent([0.25, 5])
+    .filter(function(event) {
+        // Wheel zooms no matter what's under the cursor.
+        if (event.type === "wheel") return true;
+        if (event.type === "dblclick") return false;
+        // Touch: only start a gesture for a two-finger pinch.
+        if (event.type === "touchstart") return event.touches.length === 2;
+        // Mouse: pan on empty canvas, but never steal a node drag (and only
+        // the left button pans).
+        return !event.button && !event.target.closest(".node");
+    })
+    .on("start", function() { panJustMoved = false; })
+    .on("zoom", function(event) {
+        viewport.attr("transform", event.transform);
+        // Only an actual mouse-drag pan produces a follow-up click; wheel zoom
+        // and touch pinch (sourceEvent "wheel"/"touchmove") never do.
+        panJustMoved = panJustMoved || (event.sourceEvent && event.sourceEvent.type === "mousemove");
+    });
+svg.call(zoom);
 
 
 // ── NODE DRAG ──
@@ -486,14 +523,14 @@ const drag = d3.drag()
 d3.select("#graph-container")
     .on("mousemove", function(event) {
         if (!dragSource) return;
-        const [x, y] = d3.pointer(event, svg.node());
+        const [x, y] = d3.pointer(event, viewport.node());
         dragLine.attr("x2", x).attr("y2", y);
     })
     .on("mouseup", function(event) {
         if (!dragSource) return;
         if (locked) return;
 
-        const [x, y] = d3.pointer(event, svg.node());
+        const [x, y] = d3.pointer(event, viewport.node());
         const dx = event.clientX - dragStartX;
         const dy = event.clientY - dragStartY;
         const dist = Math.sqrt(dx*dx + dy*dy);
@@ -539,9 +576,11 @@ d3.select("#graph-container")
 // ── LEFT CLICK — ADD NODE ──
 d3.select("#graph-container").on("click", function(event) {
     if (locked) return;
+    // A mouse-pan also ends with a click; don't drop a node after panning.
+    if (panJustMoved) { panJustMoved = false; return; }
     if (event.target.closest(".node")) return;
     if (event.target.closest("#clear-graph-btn")) return;
-    const [x, y] = d3.pointer(event, svg.node());
+    const [x, y] = d3.pointer(event, viewport.node());
     if (isTooClose(x, y)) return;
     graph.addNode(x, y);
     stopAnimation();
@@ -736,6 +775,50 @@ document.getElementById("export-btn").addEventListener("click", () => {
     }
     stopAnimation();
     downloadFile(exportFilename(graph), JSON.stringify(graphToJSON(graph), null, 2));
+});
+
+
+// ── HELP MODAL ──
+// Usage instructions, written once per device type (mouse vs touch).
+function showHelp() {
+    const content = document.getElementById("help-content");
+    const touch = isTouch;
+    content.innerHTML = touch ? `
+        <div class="help-sec">GRAPH</div>
+        <div>TAP empty canvas &nbsp;—&nbsp; add node</div>
+        <div>TAP node A, then TAP node B &nbsp;—&nbsp; add edge (weight prompt)</div>
+        <div>TAP two connected nodes &nbsp;—&nbsp; remove edge or change weight</div>
+        <div>HOLD a node &nbsp;—&nbsp; delete it</div>
+        <div class="help-sec">VIEW</div>
+        <div>PINCH two fingers &nbsp;—&nbsp; zoom / pan</div>
+        <div>Drag node &nbsp;—&nbsp; move it</div>
+        <div class="help-sec">RUN</div>
+        <div>Pick algorithm, set START, press <kbd>RUN</kbd>. Adjust speed live, use
+        REV + scrubber to rewind.</div>
+    ` : `
+        <div class="help-sec">GRAPH</div>
+        <div><kbd>LEFT CLICK</kbd> empty canvas &nbsp;—&nbsp; add node</div>
+        <div><kbd>RIGHT DRAG</kbd> node → node &nbsp;—&nbsp; add edge</div>
+        <div><kbd>RIGHT DRAG</kbd> connected nodes &nbsp;—&nbsp; remove edge</div>
+        <div><kbd>LEFT CLICK</kbd> node without moving &nbsp;—&nbsp; remove it</div>
+        <div class="help-sec">VIEW</div>
+        <div><kbd>WHEEL</kbd> &nbsp;—&nbsp; zoom · drag empty space &nbsp;—&nbsp; pan</div>
+        <div>Drag node &nbsp;—&nbsp; move it</div>
+        <div class="help-sec">RUN</div>
+        <div>Pick algorithm, set START, press <kbd>RUN</kbd>. Adjust speed live, use
+        REV + scrubber to rewind.</div>
+    `;
+    document.getElementById("help-modal").classList.add("show");
+}
+
+function hideHelp() {
+    document.getElementById("help-modal").classList.remove("show");
+}
+
+document.getElementById("help-btn").addEventListener("click", showHelp);
+document.getElementById("help-close").addEventListener("click", hideHelp);
+document.getElementById("help-modal").addEventListener("click", (e) => {
+    if (e.target.id === "help-modal") hideHelp();
 });
 
 

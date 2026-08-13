@@ -15,7 +15,12 @@ function isTouchDevice() {
 
 // 600 ms hold opens the delete confirmation; any bigger movement cancels it.
 const LONG_PRESS_MS = 600;
-const TAP_SLOP = 10;
+// Small movement during a tap is tolerated (finger jitter on a touch screen
+// easily exceeds 10 px); a tap is only treated as a drag beyond this.
+const TAP_SLOP = 18;
+// Long-press cancels if the finger wanders more than this much — separate
+// from TAP_SLOP so a slightly shifty press still counts as a hold.
+const LONG_PRESS_MOVE_SLOP = 30;
 
 const machine = createTouchMachine();
 
@@ -32,12 +37,19 @@ let longPressTimer = null;
 let longPressNode = null;
 let tapCanceled = false;
 
-// Find a node under a screen point. Positions are in SVG user units, which
-// equal CSS pixels because the SVG has no viewBox.
-function nodeAtPoint(clientX, clientY) {
+// Convert a screen point to graph coordinates, undoing the zoom/pan
+// transform that main.js applies to #viewport.
+function graphPoint(clientX, clientY) {
     const rect = container.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
+    const t = d3.zoomTransform(svg.node());
+    const p = t.invert([clientX - rect.left, clientY - rect.top]);
+    return p;
+}
+
+// Find a node under a screen point. Positions are converted into graph space
+// first so nodeAtPoint keeps working while the canvas is zoomed/panned.
+function nodeAtPoint(clientX, clientY) {
+    const [x, y] = graphPoint(clientX, clientY);
     return graph.nodes.find(n => {
         const dx = n.x - x;
         const dy = n.y - y;
@@ -91,8 +103,12 @@ function applyActions(actions) {
 function positionDeleteBubble(nodeId) {
     const node = graph.getNode(nodeId);
     if (!node) return;
-    deleteBubble.style.left = node.x + "px";
-    deleteBubble.style.top = node.y + "px";
+    // The bubble lives in screen space (absolute inside #graph-container),
+    // so apply the zoom/pan transform to the node's graph coordinates.
+    const t = d3.zoomTransform(svg.node());
+    const p = t.apply([node.x, node.y]);
+    deleteBubble.style.left = p[0] + "px";
+    deleteBubble.style.top = p[1] + "px";
 }
 
 function clearLongPressTimer() {
@@ -104,6 +120,14 @@ function clearLongPressTimer() {
 
 // ── Touch listeners on the canvas ──
 container.addEventListener("touchstart", (e) => {
+    // Two or more fingers means a pinch-zoom (handled by d3.zoom) — don't
+    // start tap/long-press state for multi-touch gestures, and drop any
+    // long-press timer the first finger may already have started.
+    if (e.touches.length > 1) {
+        touchActive = false;
+        clearLongPressTimer();
+        return;
+    }
     const t = e.changedTouches[0];
 
     // While a delete confirmation is open, a tap on the bubble confirms it;
@@ -140,10 +164,14 @@ container.addEventListener("touchmove", (e) => {
     const t = e.changedTouches[0];
     const dx = t.clientX - touchStartX;
     const dy = t.clientY - touchStartY;
-    if (Math.sqrt(dx*dx + dy*dy) > TAP_SLOP) {
+    const moved = Math.sqrt(dx*dx + dy*dy);
+    // A held press survives small movements; a real drag cancels the hold.
+    if (moved > LONG_PRESS_MOVE_SLOP) {
         tapCanceled = true;
         clearLongPressTimer();
     }
+    // Beyond the tap slop the touch is a drag/scroll, not a tap.
+    if (moved > TAP_SLOP) tapCanceled = true;
 }, { passive: true });
 
 container.addEventListener("touchend", (e) => {
@@ -204,6 +232,6 @@ if (isTouchDevice()) {
     document.body.classList.add("touch");
     const hint = document.querySelector("#statusbar .status-item:last-child");
     if (hint) {
-        hint.textContent = "TAP TAP — add edge · HOLD — delete node · TAP EMPTY — new node";
+        hint.textContent = "TAP node A → TAP node B: edge · HOLD node: delete · TAP empty: add node · PINCH (2 fingers): zoom & pan";
     }
 }

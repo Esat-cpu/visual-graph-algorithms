@@ -21,6 +21,13 @@ An interactive graph algorithm visualizer built with Vanilla JS and D3.js.
 - **Right click** a node to remove it
 - **Left drag** a node to reposition it
 
+### Zoom & Pan
+
+- **Mouse wheel** zooms in/out around the cursor.
+- **Drag empty canvas space** pans the view (works on desktop with the mouse).
+- **Pinch two fingers** zooms and pans on touch screens.
+- Nodes and edges always stay on screen — zooming only changes the view, not the graph.
+
 ### Mobile / Touch Devices
 
 On touch screens the interaction model changes to be safe and simple:
@@ -30,6 +37,7 @@ On touch screens the interaction model changes to be safe and simple:
 - Tapping an edge that already exists opens its weight dialog, which now also has a **REMOVE EDGE** button.
 - **Long-press a node** (600 ms) until a red bubble appears, then confirm to delete it.
 - Tapping empty canvas clears the current selection.
+- **Pinch with two fingers** to zoom and pan the view.
 
 ### Graph Mode
 

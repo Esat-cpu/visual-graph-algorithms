@@ -52,6 +52,8 @@
         <button id="export-btn" title="Save the current graph to a file">⬇ EXPORT</button>
         <button id="import-btn" title="Load a graph from a file">⬆ IMPORT</button>
 
+        <button id="help-btn" title="How to use the visualizer">?</button>
+
         <span id="active-algo-label">DIJKSTRA</span>
     </div>
 
@@ -85,8 +87,12 @@
                         <polygon points="0 0, 14 6, 0 12" fill="#666666" />
                     </marker>
                 </defs>
-                <g id="edges-layer"></g>
-                <g id="nodes-layer"></g>
+                <!-- Zoom/pan transform is applied to this group so node and
+                     edge coordinates stay in graph space. -->
+                <g id="viewport">
+                    <g id="edges-layer"></g>
+                    <g id="nodes-layer"></g>
+                </g>
             </svg>
         </div>
 
@@ -108,7 +114,7 @@
     <div id="statusbar">
         <span class="status-item">NODES <b id="stat-nodes">0</b></span>
         <span class="status-item">EDGES <b id="stat-edges">0</b></span>
-        <span class="status-item">LEFT CLICK — add node &nbsp;·&nbsp; RIGHT DRAG — add/remove edge &nbsp;·&nbsp; RIGHT CLICK node — remove</span>
+        <span class="status-item">LEFT CLICK — add node &nbsp;·&nbsp; RIGHT DRAG — add/remove edge &nbsp;·&nbsp; RIGHT CLICK node — remove &nbsp;·&nbsp; WHEEL — zoom</span>
     </div>
 
     <!-- HIDDEN FILE INPUT for import -->
@@ -136,6 +142,17 @@
             <div class="modal-btns">
                 <button id="import-confirm">REPLACE</button>
                 <button id="import-cancel">CANCEL</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HELP MODAL — usage instructions, reworded per device on load -->
+    <div id="help-modal">
+        <div id="help-modal-box">
+            <h6>HOW TO USE</h6>
+            <div id="help-content"></div>
+            <div class="modal-btns">
+                <button id="help-close">OK</button>
             </div>
         </div>
     </div>

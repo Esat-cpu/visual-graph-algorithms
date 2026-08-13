@@ -24,7 +24,12 @@ body {
     background: var(--bg-base);
     color: var(--text-primary);
     font-family: 'Inter', sans-serif;
+    /* On mobile browsers 100vh is taller than the visible area (URL bar
+       overlaps it), pushing the status bar behind the browser chrome.
+       100dvh tracks the dynamic viewport; the 100vh line stays as a
+       fallback for browsers without dvh support. */
     height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -210,6 +215,92 @@ body {
     border-color: var(--accent);
 }
 
+/* Help — small quiet circle button after IMPORT */
+#help-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    width: 28px;
+    height: 28px;
+    line-height: 1;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-left: 8px;
+}
+
+#help-btn:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+/* HELP MODAL — usage instructions */
+#help-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+#help-modal.show { display: flex; }
+
+#help-modal-box {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    width: 400px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+#help-modal-box h6 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+}
+
+#help-content {
+    font-size: 13px;
+    color: var(--text-primary);
+    line-height: 1.6;
+    margin-bottom: 18px;
+}
+
+#help-content kbd {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: var(--accent);
+}
+
+#help-content .help-sec {
+    margin-top: 10px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+#help-close {
+    background: var(--accent);
+    color: #fff;
+}
+#help-close:hover { background: var(--accent-dim); }
+
 #speed-group {
     display: flex;
     align-items: center;
@@ -317,6 +408,9 @@ body {
     background-size: 32px 32px;
     overflow: hidden;
     cursor: crosshair;
+    /* Let d3.zoom own pinch gestures on the canvas instead of the browser
+       zooming the whole page. */
+    touch-action: none;
 }
 
 #graph-container.locked { cursor: not-allowed; }
@@ -657,6 +751,10 @@ body {
     padding: 0 16px;
     gap: 20px;
     flex-shrink: 0;
+    /* Keep the bar clear of the gesture/button area on phones with a
+       bottom safe-area inset (home indicator). */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    height: calc(26px + env(safe-area-inset-bottom, 0px));
 }
 
 .status-item {
@@ -750,6 +848,58 @@ body {
     }
 }
 
+/* ── MOBILE — compact top bar ──
+   Phones can't fit all four algorithm buttons plus mode, start, speed and the
+   action buttons even on two wrapped lines, so the controls pack tighter: the
+   intro hint and always-on algorithm label are dropped and the buttons shrink.
+   The bar stays a wrapping flex row, which collapses to 2–3 tight rows. */
+@media (max-width: 900px) {
+    #app-title {
+        font-size: 12px;
+        margin-right: 16px;
+    }
+
+    .app-btn {
+        padding: 6px 10px;
+        font-size: 10px;
+    }
+
+    #start-node-input { width: 56px; }
+
+    #speed-slider { width: 72px; }
+
+    #run-btn, #export-btn, #import-btn { padding: 6px 10px; }
+
+    /* The always-on label is redundant on a phone; drop it so the wrapped
+       rows stay tidy. */
+    #active-algo-label { display: none; }
+
+    #statusbar {
+        gap: 12px;
+        padding: 0 12px;
+    }
+}
+
+/* Very small screens: drop the app title entirely and tighten again so the
+   whole bar stays ~3 rows. */
+@media (max-width: 480px) {
+    #app-title { display: none; }
+
+    #topbar {
+        padding: 6px 12px;
+        row-gap: 6px;
+    }
+
+    .app-btn {
+        padding: 5px 8px;
+        font-size: 9px;
+    }
+
+    #speed-group { gap: 6px; }
+    #speed-slider { width: 64px; }
+    #start-node-group { gap: 6px; }
+}
+
 /* ── TOUCH / MOBILE ──
    Node currently tapped for a connection — bright ring so the state is
    obvious even without a hover cursor. */
@@ -801,11 +951,15 @@ body {
         bottom: 0;
         width: 100%;
         height: 42vh;
+        height: 42dvh;
         border-left: none;
         border-top: 1px solid var(--border);
         z-index: 40;
         transform: translateY(calc(100% - 38px));
         transition: transform 0.25s ease;
+        /* The sheet sits above the status bar (which already pads for the
+           home indicator); give the content a little breathing room too. */
+        padding-bottom: env(safe-area-inset-bottom, 0px);
     }
 
     #result-panel.bottom-sheet.open {
@@ -818,12 +972,21 @@ body {
     }
 }
 
-/* Small phones: drop the legend, make the weight modal full-width. */
+/* Small phones: drop the legend, make the weight modal full-width, and keep
+   the status-bar instructions from overflowing the edge. */
 @media (max-width: 640px) {
     #legend { display: none; }
 
     #weight-modal-box {
         width: calc(100% - 32px);
         margin-bottom: 8vh;
+    }
+
+    .status-item:last-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+        min-width: 0;
     }
 }

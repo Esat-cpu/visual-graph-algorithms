@@ -169,6 +169,29 @@ function fakeD3(document) {
             return behavior;
         },
 
+        zoom() {
+            const handlers = {};
+            const behavior = function (selection) {
+                // Record the handler on the actual DOM element (d3.call passes
+                // the FakeD3Selection, so unwrap it) so tests can inspect the
+                // zoom setup; the transform stays identity in jsdom.
+                const el = (selection && selection.node) ? selection.node() : selection;
+                el.__zoomHandlers = handlers;
+                return selection;
+            };
+            behavior.on = (type, fn) => { handlers[type] = fn; return behavior; };
+            behavior.scaleExtent = () => behavior;
+            behavior.filter = () => behavior;
+            return behavior;
+        },
+
+        zoomTransform() {
+            // Identity transform: graph coords == client coords (no viewBox).
+            return { k: 1, x: 0, y: 0,
+                     apply(p) { return p; },
+                     invert(p) { return p; } };
+        },
+
         pointer(event, node) {
             // jsdom reports zero-sized layout boxes, so client coords are the
             // position relative to the (empty) container — fine for tests.
@@ -234,6 +257,11 @@ function buildApp() {
     win.d3 = fakeD3(doc);
     const timers = installFakeTimers(win);
 
+    // jsdom ships no matchMedia; mobile.js queries it for layout/pointer hints.
+    win.matchMedia = win.matchMedia || function(query) {
+        return { matches: false, media: query, addEventListener() {}, removeEventListener() {} };
+    };
+
     // Expose the pure modules as window globals, exactly like <script> tags.
     win.Graph = require("../js/graph.js").Graph;
     win.Playback = require("../js/playback.js").Playback;
@@ -248,7 +276,6 @@ function buildApp() {
 
     return { dom, win, doc, timers, app: win.__app };
 }
-
 // Add a node by simulating a left-click on the canvas (goes through the real
 // #graph-container click handler).
 function clickCanvas(win, doc, x, y) {
@@ -400,6 +427,87 @@ function test_result_panel_is_a_bottom_sheet_on_mobile() {
     console.log("UI Test 7 (bottom-sheet class) Succesful!");
 }
 
+function test_viewport_group_and_zoom_setup() {
+    const { doc, win } = buildApp();
+
+    // All node/edge layers live inside <g id="viewport"> so zoom/pan can
+    // transform one group without touching graph coordinates.
+    const viewport = doc.getElementById("viewport");
+    assert(viewport != null, "viewport group exists");
+    assert(viewport.querySelector("#edges-layer") != null, "edges layer inside viewport");
+    assert(viewport.querySelector("#nodes-layer") != null, "nodes layer inside viewport");
+
+    // The svg carries the d3.zoom behavior (with its handlers recorded).
+    const svgEl = doc.getElementById("graph-svg");
+    assert(svgEl.__zoomHandlers != null, "d3.zoom bound to the svg");
+    assert(typeof svgEl.__zoomHandlers.zoom === "function", "zoom handler registered");
+
+    win.close();
+    console.log("UI Test 8 (viewport + zoom setup) Succesful!");
+}
+
+function test_help_modal_opens_and_closes() {
+    const { doc, win } = buildApp();
+
+    const modal = doc.getElementById("help-modal");
+    assert(!modal.classList.contains("show"), "help modal starts hidden");
+
+    doc.getElementById("help-btn").click();
+    assert(modal.classList.contains("show"), "help button opens the modal");
+    const content = doc.getElementById("help-content");
+    assert(content.textContent.includes("PINCH") || content.textContent.includes("WHEEL"),
+           "help text mentions the zoom gesture");
+    assert(content.textContent.length > 50, "help text is populated");
+
+    doc.getElementById("help-close").click();
+    assert(!modal.classList.contains("show"), "OK closes the modal");
+
+    win.close();
+    console.log("UI Test 9 (help modal) Succesful!");
+}
+
+function test_pan_does_not_add_node() {
+    const { doc, win } = buildApp();
+
+    // Simulate a pan: a mouse drag that ends far from where it started should
+    // not drop a node when the synthetic click fires afterwards.
+    const svgEl = doc.getElementById("graph-svg");
+    svgEl.__zoomHandlers.zoom({
+        transform: { k: 1, x: 50, y: 50 },
+        sourceEvent: { type: "mousemove" }
+    });
+
+    clickCanvas(win, doc, 120, 120);   // this click is the pan's synthetic one
+    assert(doc.getElementById("stat-nodes").textContent === "0", "no node added after pan");
+
+    // A clean click (no pan) still adds a node.
+    clickCanvas(win, doc, 200, 200);
+    assert(doc.getElementById("stat-nodes").textContent === "1", "plain click adds a node");
+
+    win.close();
+    console.log("UI Test 10 (pan doesn't add node) Succesful!");
+}
+
+function test_mobile_script_loads_after_main() {
+    const { doc, win } = buildApp();
+
+    // mobile.js runs in the same window scope as main.js and depends on its
+    // globals (svg, graph, NODE_SIZE, render) plus touch.js's state machine.
+    // Loading them together catches wiring regressions (e.g. a renamed helper)
+    // without needing real touch events.
+    const mobileSrc =
+        fs.readFileSync(path.join(__dirname, "..", "js", "touch.js"), "utf8") + "\n" +
+        fs.readFileSync(path.join(__dirname, "..", "js", "mobile.js"), "utf8");
+    win.eval(mobileSrc);
+
+    assert(doc.querySelector(".node-delete-bubble") != null, "delete bubble element created");
+    // touch.js's createTouchMachine was invoked by mobile.js already — if the
+    // wiring were broken, the eval above would have thrown.
+
+    win.close();
+    console.log("UI Test 11 (mobile script loads) Succesful!");
+}
+
 
 test_run_button_disabled_until_graph_has_nodes();
 test_legend_and_mode_switch();
@@ -408,3 +516,7 @@ test_enter_key_runs_algorithm();
 test_speed_slider_scales_step_delay_live();
 test_playback_bar_stays_after_completion();
 test_result_panel_is_a_bottom_sheet_on_mobile();
+test_viewport_group_and_zoom_setup();
+test_help_modal_opens_and_closes();
+test_pan_does_not_add_node();
+test_mobile_script_loads_after_main();
