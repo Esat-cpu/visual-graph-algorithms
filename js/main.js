@@ -88,11 +88,105 @@ function edgeGeometry(e) {
     const R = NODE_SIZE;
 
     return {
+        ax: a.x, ay: a.y,                       // edge endpoints (for labels)
+        ux, uy, len,                            // direction + length
+        ox: nx, oy: ny,                         // perpendicular offset
+        midX: (a.x + b.x) / 2, midY: (a.y + b.y) / 2,
         x1: a.x + ux * R + nx, y1: a.y + uy * R + ny,
         x2: b.x - ux * R + nx, y2: b.y - uy * R + ny,
         lx: (a.x + b.x) / 2 + nx,               // label sits on the offset line
         ly: (a.y + b.y) / 2 + ny - 8
     };
+}
+
+
+// ── WEIGHT LABEL PLACEMENT ──
+// Labels used to sit at the exact midpoint of every edge. When several edges
+// cross the same area (nodes laid out on a straight line, say), midpoints can
+// coincide and the labels overlap — especially with multi-digit weights.
+// Instead of pushing a label perpendicular to its edge (which visually
+// detaches it), we slide it ALONG its own line: it always stays on the segment
+// it belongs to, so which edge a label describes stays obvious. Short edges
+// get priority for the midpoint because they have the least room to move;
+// long edges dodge to the nearest free spot on their line.
+const LABEL_CHAR_W = 8.4;        // JetBrains Mono 14px ≈ 0.6 × font-size
+const LABEL_H = 16;              // label box height used for collision tests
+const LABEL_GAP = 4;             // minimum gap between two label boxes
+const LABEL_T_LIMIT = 0.25;      // keep labels in the middle of the line
+
+// Candidate label spots, ordered best-first:
+// 1) the midpoint, then sliding along the line — the label stays attached to
+//    its edge and reads unambiguously;
+// 2) stacking perpendicular to the midpoint when the line itself has no free
+//    room (e.g. a long edge crossing a busy row of nodes). The label then
+//    floats directly above/below its own edge's middle, so the association
+//    stays clear. Each level steps a full label-height away.
+function labelCandidates() {
+    const ts = [0.5];
+    for (let d = 0.05; d <= 0.5 - LABEL_T_LIMIT; d += 0.05)
+        ts.push(0.5 - d, 0.5 + d);
+
+    const cands = ts.map(t => ({ t, p: 0 }));
+    for (let k = 1; k <= 3; k++) {
+        const p = k * (LABEL_H + LABEL_GAP);
+        cands.push({ t: 0.5, p }, { t: 0.5, p: -p });
+    }
+    return cands;
+}
+
+function boxesIntersect(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x &&
+           a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+// True when the label box would cover any node circle (incl. its own ends).
+function overlapsNode(box) {
+    const size = NODE_SIZE * 2;
+    return graph.nodes.some(n =>
+        boxesIntersect(box, { x: n.x - size / 2, y: n.y - size / 2, w: size, h: size }));
+}
+
+// Compute a collision-free position for every edge's weight label.
+// Returns a Map keyed by "source-target" → { x, y }.
+function placeWeightLabels() {
+    const placed = [];
+
+    // Shorter edges are processed first so they keep the midpoint.
+    const order = [...graph.edges]
+        .map(e => ({ e, g: edgeGeometry(e) }))
+        .sort((a, b) => a.g.len - b.g.len);
+
+    const result = new Map();
+
+    order.forEach(({ e, g }) => {
+        const w = String(e.weight).length * LABEL_CHAR_W;
+        const h = LABEL_H;
+
+        let best = { x: g.midX + g.ox, y: g.midY + g.oy - 8 };   // midpoint fallback
+
+        for (const { t, p } of labelCandidates()) {
+            // Point on the line at fraction t, then the perpendicular offset
+            // (ox, oy) of the edge itself, then any stacked offset p along the
+            // perpendicular direction (-uy, ux); the -8 lifts the text up.
+            const x = g.ax + g.len * g.ux * t + g.ox - g.uy * p;
+            const y = g.ay + g.len * g.uy * t + g.oy + g.ux * p - 8;
+            const box = { x: x - w / 2, y: y - h / 2, w, h };
+
+            // Reject spots that collide with another label or with a node
+            if (placed.some(p => boxesIntersect(p, box))) continue;
+            if (overlapsNode(box)) continue;
+
+            best = { x, y };
+            break;
+        }
+
+        placed.push({
+            x: best.x - w / 2, y: best.y - h / 2, w, h
+        });
+        result.set(`${e.source}-${e.target}`, best);
+    });
+
+    return result;
 }
 
 
@@ -111,6 +205,10 @@ function flashStatus(message) {
 
 // ── RENDER ──
 function render() {
+    // Compute a collision-free spot for every weight label once, so all
+    // edges agree on the layout before any of them draws.
+    const labelPositions = placeWeightLabels();
+
     // Edges
     const edgeGroups = edgesLayer.selectAll(".edge")
         .data(graph.edges, e => `${e.source}-${e.target}`)
@@ -132,8 +230,8 @@ function render() {
         .attr("marker-end", graph.directed ? "url(#arrowhead)" : null);
 
     edgeGroups.select("text")
-        .attr("x", e => edgeGeometry(e).lx)
-        .attr("y", e => edgeGeometry(e).ly)
+        .attr("x", e => labelPositions.get(`${e.source}-${e.target}`).x)
+        .attr("y", e => labelPositions.get(`${e.source}-${e.target}`).y)
         .text(e => e.weight);
 
     // Nodes

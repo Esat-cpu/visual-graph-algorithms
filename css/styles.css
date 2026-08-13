@@ -437,6 +437,12 @@ body {
     pointer-events: none;
     dominant-baseline: central;
     text-anchor: middle;
+    /* White halo behind the glyphs keeps the label readable even when it
+       sits directly on top of its own edge line. */
+    paint-order: stroke;
+    stroke: var(--bg-panel);
+    stroke-width: 3px;
+    stroke-linejoin: round;
 }
 
 /* ── STATUS BAR ── */
