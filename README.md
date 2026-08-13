@@ -12,7 +12,7 @@ An interactive graph algorithm visualizer built with Vanilla JS and D3.js.
 | Algorithm | Type | Description |
 |-----------|------|-------------|
 | **Dijkstra** | Shortest Path | Finds the shortest path from a source node to all other nodes |
-| **Bellman-Ford** | Shortest Path | Like Dijkstra, but handles graphs with more complex edge structures |
+| **Bellman-Ford** | Shortest Path | Handles negative edge weights and detects negative cycles |
 | **Prim** | Minimum Spanning Tree | Builds an MST by greedily adding the cheapest edge from the visited set |
 | **Kruskal** | Minimum Spanning Tree | Builds an MST by sorting all edges and adding them without creating cycles |
 
