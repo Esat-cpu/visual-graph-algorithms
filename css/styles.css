@@ -215,6 +215,11 @@ body {
     border-color: var(--accent);
 }
 
+/* Export + Import always share one row, even when the top bar wraps. */
+#io-group {
+    align-items: center;
+}
+
 /* Help — small quiet circle button after IMPORT */
 #help-btn {
     font-family: 'JetBrains Mono', monospace;
@@ -402,15 +407,35 @@ body {
     flex: 1;
     position: relative;
     background: var(--bg-graph);
-    background-image:
-        linear-gradient(var(--border-subtle) 1px, transparent 1px),
-        linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
-    background-size: 32px 32px;
     overflow: hidden;
     cursor: crosshair;
     /* Let d3.zoom own pinch gestures on the canvas instead of the browser
        zooming the whole page. */
     touch-action: none;
+    /* Keep Android/iOS from reacting to long-presses with their own menus,
+       magnifiers or haptics — long-press is our delete gesture. */
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+}
+
+/* Touch-only pill that explains the tap-to-connect state while a node is
+   selected. Fades in above the canvas, clear of the CLEAR button. */
+#node-connect-hint {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    padding: 6px 12px;
+    background: rgba(17, 17, 17, 0.92);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    white-space: nowrap;
+    pointer-events: none;
 }
 
 #graph-container.locked { cursor: not-allowed; }

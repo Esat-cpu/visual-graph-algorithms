@@ -166,6 +166,7 @@ function fakeD3(document) {
                 return selection;
             };
             behavior.on = (type, fn) => { handlers[type] = fn; return behavior; };
+            behavior.filter = () => behavior;
             return behavior;
         },
 
@@ -442,8 +443,28 @@ function test_viewport_group_and_zoom_setup() {
     assert(svgEl.__zoomHandlers != null, "d3.zoom bound to the svg");
     assert(typeof svgEl.__zoomHandlers.zoom === "function", "zoom handler registered");
 
+    // The grid lives in the SVG (a <pattern> fill on a huge rect), not a CSS
+    // background, so it can share the zoom/pan transform with #viewport and
+    // stay aligned with the nodes at any scale.
+    const gridLayer = doc.getElementById("grid-layer");
+    assert(gridLayer != null, "grid layer group exists");
+    const gridFill = doc.getElementById("grid-fill");
+    assert(gridFill != null, "grid fill rect exists");
+    assert(gridFill.getAttribute("fill").includes("grid-pattern"), "grid rect uses the tiled pattern");
+    assert(parseFloat(gridFill.getAttribute("width")) > 0, "grid rect is sized for the visible area");
+
+    // Firing the zoom handler must transform BOTH the viewport and the grid.
+    svgEl.__zoomHandlers.zoom({
+        transform: { k: 2, x: 10, y: 20 },
+        sourceEvent: { type: "wheel" }
+    });
+    assert(doc.getElementById("viewport").getAttribute("transform") != null,
+        "viewport receives the zoom transform");
+    assert(gridLayer.getAttribute("transform") != null,
+        "grid layer receives the same zoom transform");
+
     win.close();
-    console.log("UI Test 8 (viewport + zoom setup) Succesful!");
+    console.log("UI Test 8 (viewport + zoom + grid) Succesful!");
 }
 
 function test_help_modal_opens_and_closes() {
@@ -469,8 +490,8 @@ function test_help_modal_opens_and_closes() {
 function test_pan_does_not_add_node() {
     const { doc, win } = buildApp();
 
-    // Simulate a pan: a mouse drag that ends far from where it started should
-    // not drop a node when the synthetic click fires afterwards.
+    // Simulate a pan: the zoom gesture (right-button drag) that ends far from
+    // where it started should not drop a node when the synthetic click fires.
     const svgEl = doc.getElementById("graph-svg");
     svgEl.__zoomHandlers.zoom({
         transform: { k: 1, x: 50, y: 50 },
@@ -480,7 +501,13 @@ function test_pan_does_not_add_node() {
     clickCanvas(win, doc, 120, 120);   // this click is the pan's synthetic one
     assert(doc.getElementById("stat-nodes").textContent === "0", "no node added after pan");
 
-    // A clean click (no pan) still adds a node.
+    // A clean click (no pan) still adds a node. In the browser every click is
+    // preceded by a mousedown, which clears the drag-suppression flag; replay
+    // that press so the flag can't leak across separate interactions.
+    const container = doc.getElementById("graph-container");
+    container.dispatchEvent(new win.MouseEvent("mousedown", {
+        bubbles: true, cancelable: true, button: 0, clientX: 200, clientY: 200
+    }));
     clickCanvas(win, doc, 200, 200);
     assert(doc.getElementById("stat-nodes").textContent === "1", "plain click adds a node");
 
@@ -488,17 +515,66 @@ function test_pan_does_not_add_node() {
     console.log("UI Test 10 (pan doesn't add node) Succesful!");
 }
 
-function test_mobile_script_loads_after_main() {
-    const { doc, win } = buildApp();
-
+function loadMobile(win) {
     // mobile.js runs in the same window scope as main.js and depends on its
-    // globals (svg, graph, NODE_SIZE, render) plus touch.js's state machine.
-    // Loading them together catches wiring regressions (e.g. a renamed helper)
-    // without needing real touch events.
+    // globals (svg, graph, NODE_SIZE, render, ...) plus touch.js's state
+    // machine. The jsdom harness evals each file in its own scope, so the
+    // shared refs main.js re-exposes on window.__app are rebound here; only
+    // the weight modal is stubbed (its real DOM wiring is covered elsewhere).
+    const prelude = `
+        var svg = window.__app.svg;
+        var nodesLayer = window.__app.nodesLayer;
+        var NODE_SIZE = window.__app.NODE_SIZE;
+        var MIN_DISTANCE = window.__app.MIN_DISTANCE;
+        var render = window.__app.render;
+        var queueRender = window.__app.queueRender;
+        var stopAnimation = window.__app.stopAnimation;
+        var graph = window.__app.graph;
+        var locked = window.__app.locked;
+        var pendingEdge = null;
+        var showWeightModal = function() { window.__weightModalOpened = true; };
+        var d3 = window.d3;
+    `;
     const mobileSrc =
         fs.readFileSync(path.join(__dirname, "..", "js", "touch.js"), "utf8") + "\n" +
         fs.readFileSync(path.join(__dirname, "..", "js", "mobile.js"), "utf8");
-    win.eval(mobileSrc);
+    win.eval(prelude + mobileSrc);
+}
+
+// Dispatch a single tap (touchstart + touchend) at client coords, the way a
+// finger would land on the canvas.
+function tapAt(win, doc, x, y) {
+    touchStartAt(win, doc, x, y);
+    touchEndAt(win, doc, x, y);
+}
+
+function touchStartAt(win, doc, x, y) {
+    const container = doc.getElementById("graph-container");
+    const touch = { clientX: x, clientY: y };
+    container.dispatchEvent(new win.TouchEvent("touchstart", {
+        bubbles: true, cancelable: true, touches: [touch], changedTouches: [touch]
+    }));
+}
+
+function touchEndAt(win, doc, x, y) {
+    const container = doc.getElementById("graph-container");
+    const touch = { clientX: x, clientY: y };
+    container.dispatchEvent(new win.TouchEvent("touchend", {
+        bubbles: true, cancelable: true, touches: [], changedTouches: [touch]
+    }));
+}
+
+function touchMoveTo(win, doc, x, y) {
+    const container = doc.getElementById("graph-container");
+    const touch = { clientX: x, clientY: y };
+    container.dispatchEvent(new win.TouchEvent("touchmove", {
+        bubbles: true, cancelable: true, touches: [touch], changedTouches: [touch]
+    }));
+}
+
+function test_mobile_script_loads_after_main() {
+    const { doc, win } = buildApp();
+    loadMobile(win);
 
     assert(doc.querySelector(".node-delete-bubble") != null, "delete bubble element created");
     // touch.js's createTouchMachine was invoked by mobile.js already — if the
@@ -508,6 +584,214 @@ function test_mobile_script_loads_after_main() {
     console.log("UI Test 11 (mobile script loads) Succesful!");
 }
 
+function test_touch_tap_to_connect_and_hint() {
+    const { doc, win } = buildApp();
+    loadMobile(win);
+
+    // Export/Import always share one row.
+    const ioGroup = doc.getElementById("io-group");
+    assert(ioGroup != null, "io-group wrapper exists");
+    assert(ioGroup.querySelector("#export-btn") != null, "export lives in io-group");
+    assert(ioGroup.querySelector("#import-btn") != null, "import lives in io-group");
+
+    // No selection yet: the connect hint is hidden.
+    const hint = doc.getElementById("node-connect-hint");
+    assert(hint.classList.contains("hidden"), "connect hint hidden initially");
+
+    clickCanvas(win, doc, 100, 100);   // node 0
+    clickCanvas(win, doc, 250, 100);   // node 1
+    assert(doc.getElementById("stat-nodes").textContent === "2", "two nodes placed");
+
+    // Tap node 0 → it becomes selected and the hint explains the next step.
+    tapAt(win, doc, 100, 100);
+    const selected = doc.querySelectorAll(".node.node-selected");
+    assert(selected.length === 1, "exactly one node selected");
+    assert(selected[0].__data__.id === 0, "node 0 is the selected one");
+    assert(!hint.classList.contains("hidden"), "connect hint visible after selection");
+    assert(hint.textContent.indexOf("0") !== -1, "hint names the selected node");
+
+    // Tap node 1 → edge prompt opens (the tap-to-connect flow works end to end).
+    tapAt(win, doc, 250, 100);
+    assert(win.__weightModalOpened === true,
+        "weight modal opens after tapping a second node");
+    assert(doc.querySelectorAll(".node.node-selected").length === 0,
+        "selection ring does not linger after connecting");
+
+    win.close();
+    console.log("UI Test 12 (touch tap-to-connect + hint) Succesful!");
+}
+
+function test_touch_long_press_delete() {
+    const { doc, win, app, timers } = buildApp();
+    loadMobile(win);
+
+    clickCanvas(win, doc, 100, 100);   // node 0
+    assert(app.graph.nodes.length === 1, "one node placed");
+
+    const bubble = doc.querySelector(".node-delete-bubble");
+    assert(bubble.classList.contains("hidden"), "bubble hidden before long-press");
+
+    // Hold a finger on the node: touchstart arms the 600 ms long-press timer,
+    // which is tracked by the fake timer queue.
+    touchStartAt(win, doc, 100, 100);
+    timers.fireNext();                  // 600 ms elapses while still holding
+    assert(!bubble.classList.contains("hidden"), "delete bubble appears after a long-press");
+    assert(bubble.textContent === "DELETE", "bubble says DELETE");
+
+    // Lifting the finger must not dismiss the bubble (tap was consumed by the
+    // long-press) — the user now taps the bubble to confirm.
+    touchEndAt(win, doc, 100, 100);
+    assert(!bubble.classList.contains("hidden"), "bubble survives finger lift");
+
+    // Tapping the bubble confirms the deletion.
+    bubble.dispatchEvent(new win.TouchEvent("touchend", {
+        bubbles: true, cancelable: true, touches: [], changedTouches: [{ clientX: 0, clientY: 0 }]
+    }));
+    assert(app.graph.nodes.length === 0, "confirmed delete removes the node");
+    assert(bubble.classList.contains("hidden"), "bubble hides after deleting");
+
+    win.close();
+    console.log("UI Test 13 (touch long-press delete) Succesful!");
+}
+
+function test_touch_node_drag() {
+    const { doc, win, app } = buildApp();
+    loadMobile(win);
+
+    clickCanvas(win, doc, 100, 100);   // node 0
+    const node0 = app.graph.nodes[0];
+    assert(node0.x === 100 && node0.y === 100, "node placed at start position");
+
+    // Finger down on the node, then move well past the tap slop.
+    touchStartAt(win, doc, 100, 100);
+    touchMoveTo(win, doc, 130, 120);   // ~36 px — past TAP_SLOP
+    touchMoveTo(win, doc, 160, 150);
+    assert(node0.x === 160 && node0.y === 150, "node follows the finger while dragging");
+    assert(doc.querySelectorAll(".node.node-selected").length === 0,
+        "a drag is not a selection");
+
+    // Lifting the finger ends the drag without opening the weight modal.
+    touchEndAt(win, doc, 160, 150);
+    assert(win.__weightModalOpened === undefined || win.__weightModalOpened === false,
+        "releasing a drag does not connect");
+
+    // A drag onto an occupied spot is rejected: the node flashes red and stays
+    // put, then returns to blue when the finger lifts — like the desktop drag.
+    clickCanvas(win, doc, 300, 100);   // node 1 (far from node 0 at 160,150)
+    assert(app.graph.nodes.length === 2, "second node placed");
+    touchStartAt(win, doc, 160, 150);
+    touchMoveTo(win, doc, 295, 100);   // ~5 px from node 1 — too close
+    assert(node0.x === 160 && node0.y === 150, "rejected position does not move the node");
+    const circle = doc.querySelectorAll(".node")[0].querySelector("circle");
+    assert(circle.getAttribute("fill") === "#ef4444", "rejected touch position flashes red");
+    touchEndAt(win, doc, 295, 100);
+    assert(circle.getAttribute("fill") === "#3b82f6", "touch drag end restores the blue fill");
+
+    win.close();
+    console.log("UI Test 14 (touch node drag) Succesful!");
+}
+
+
+function test_desktop_drag_buttons() {
+    const { doc, win, app } = buildApp();
+    const container = doc.getElementById("graph-container");
+
+    clickCanvas(win, doc, 100, 100);   // node 0
+    const node0 = app.graph.nodes[0];
+    assert(node0.x === 100 && node0.y === 100, "node placed at start position");
+
+    // LEFT-drag on the node moves it (mousedown → mousemove → mouseup).
+    doc.querySelector(".node").dispatchEvent(new win.MouseEvent("mousedown", {
+        bubbles: true, cancelable: true, button: 0, clientX: 100, clientY: 100
+    }));
+    container.dispatchEvent(new win.MouseEvent("mousemove", {
+        bubbles: true, cancelable: true, button: 0, clientX: 200, clientY: 150
+    }));
+    container.dispatchEvent(new win.MouseEvent("mouseup", {
+        bubbles: true, cancelable: true, button: 0, clientX: 200, clientY: 150
+    }));
+    assert(node0.x === 200 && node0.y === 150, "left-drag repositions the node");
+    assert(app.graph.nodes.length === 1, "drag on a node must not duplicate it");
+
+    // The synthetic click after the drag must not plant a new node.
+    clickCanvas(win, doc, 200, 150);
+    assert(app.graph.nodes.length === 1, "trailing click after node drag adds nothing");
+
+    // RIGHT-drag on the node must NOT move it (right button is edge/pan only).
+    doc.querySelector(".node").dispatchEvent(new win.MouseEvent("mousedown", {
+        bubbles: true, cancelable: true, button: 2, clientX: 200, clientY: 150
+    }));
+    container.dispatchEvent(new win.MouseEvent("mousemove", {
+        bubbles: true, cancelable: true, button: 2, clientX: 260, clientY: 180
+    }));
+    container.dispatchEvent(new win.MouseEvent("mouseup", {
+        bubbles: true, cancelable: true, button: 2, clientX: 260, clientY: 180
+    }));
+    assert(node0.x === 200 && node0.y === 150, "right-drag on a node leaves it put");
+
+    // A left-drag on the EMPTY canvas no longer pans; it must also not add a
+    // node when the trailing click fires.
+    const nodeCount = app.graph.nodes.length;
+    container.dispatchEvent(new win.MouseEvent("mousedown", {
+        bubbles: true, cancelable: true, button: 0, clientX: 10, clientY: 10
+    }));
+    container.dispatchEvent(new win.MouseEvent("mousemove", {
+        bubbles: true, cancelable: true, button: 0, clientX: 60, clientY: 60
+    }));
+    container.dispatchEvent(new win.MouseEvent("mouseup", {
+        bubbles: true, cancelable: true, button: 0, clientX: 60, clientY: 60
+    }));
+    clickCanvas(win, doc, 60, 60);
+    assert(app.graph.nodes.length === nodeCount, "left-drag on empty canvas adds no node");
+
+    // FAST CLICKING: a press that wanders a few pixels during a quick click is
+    // still a click (CLICK_SLOP), so rapid node creation keeps working.
+    container.dispatchEvent(new win.MouseEvent("mousedown", {
+        bubbles: true, cancelable: true, button: 0, clientX: 40, clientY: 200
+    }));
+    container.dispatchEvent(new win.MouseEvent("mousemove", {
+        bubbles: true, cancelable: true, button: 0, clientX: 44, clientY: 203   // ~5 px jitter
+    }));
+    container.dispatchEvent(new win.MouseEvent("mouseup", {
+        bubbles: true, cancelable: true, button: 0, clientX: 44, clientY: 203
+    }));
+    clickCanvas(win, doc, 44, 203);
+    assert(app.graph.nodes.length === nodeCount + 1, "slight jitter during a click still adds a node");
+
+    win.close();
+    console.log("UI Test 15 (desktop drag buttons) Succesful!");
+}
+
+function test_desktop_drag_blocked_flash() {
+    const { doc, win, app } = buildApp();
+    const container = doc.getElementById("graph-container");
+
+    clickCanvas(win, doc, 100, 100);   // node 0
+    clickCanvas(win, doc, 200, 100);   // node 1 (100 px away — above MIN_DISTANCE)
+    assert(app.graph.nodes.length === 2, "two nodes placed");
+    const node0 = app.graph.nodes[0];
+
+    // Left-drag node 0 onto node 1's position: MIN_DISTANCE rejects it and the
+    // node flashes red instead of moving.
+    doc.querySelector(".node").dispatchEvent(new win.MouseEvent("mousedown", {
+        bubbles: true, cancelable: true, button: 0, clientX: 100, clientY: 100
+    }));
+    container.dispatchEvent(new win.MouseEvent("mousemove", {
+        bubbles: true, cancelable: true, button: 0, clientX: 205, clientY: 100
+    }));
+    assert(node0.x === 100 && node0.y === 100, "node does not move into an occupied spot");
+    const circle = doc.querySelector(".node").querySelector("circle");
+    assert(circle.getAttribute("fill") === "#ef4444", "rejected position flashes the node red");
+
+    // Releasing restores the normal fill.
+    container.dispatchEvent(new win.MouseEvent("mouseup", {
+        bubbles: true, cancelable: true, button: 0, clientX: 205, clientY: 100
+    }));
+    assert(circle.getAttribute("fill") === "#3b82f6", "drag end restores the blue fill");
+
+    win.close();
+    console.log("UI Test 16 (desktop drag blocked flash) Succesful!");
+}
 
 test_run_button_disabled_until_graph_has_nodes();
 test_legend_and_mode_switch();
@@ -520,3 +804,8 @@ test_viewport_group_and_zoom_setup();
 test_help_modal_opens_and_closes();
 test_pan_does_not_add_node();
 test_mobile_script_loads_after_main();
+test_touch_tap_to_connect_and_hint();
+test_touch_long_press_delete();
+test_touch_node_drag();
+test_desktop_drag_buttons();
+test_desktop_drag_blocked_flash();

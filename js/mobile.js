@@ -17,10 +17,10 @@ function isTouchDevice() {
 const LONG_PRESS_MS = 600;
 // Small movement during a tap is tolerated (finger jitter on a touch screen
 // easily exceeds 10 px); a tap is only treated as a drag beyond this.
-const TAP_SLOP = 18;
+const TAP_SLOP = 24;
 // Long-press cancels if the finger wanders more than this much — separate
 // from TAP_SLOP so a slightly shifty press still counts as a hold.
-const LONG_PRESS_MOVE_SLOP = 30;
+const LONG_PRESS_MOVE_SLOP = 34;
 
 const machine = createTouchMachine();
 
@@ -30,12 +30,28 @@ deleteBubble.className = "node-delete-bubble hidden";
 deleteBubble.textContent = "DELETE";
 container.appendChild(deleteBubble);
 
+// Floating pill that tells the user which node is selected and what to do
+// next — the whole tap-to-connect flow is invisible without it.
+const connectHint = document.getElementById("node-connect-hint");
+
+function setConnectHint(nodeId) {
+    if (nodeId == null) {
+        connectHint.classList.add("hidden");
+    } else {
+        connectHint.textContent = "Node " + nodeId + " selected — tap another node to connect";
+        connectHint.classList.remove("hidden");
+    }
+}
+
 let touchActive = false;
 let touchStartX = 0;
 let touchStartY = 0;
 let longPressTimer = null;
 let longPressNode = null;
 let tapCanceled = false;
+// Set once a finger that started on a node moves beyond the tap slop — the
+// touch becomes a node-drag (finger repositions the node) instead of a tap.
+let draggingNode = null;
 
 // Convert a screen point to graph coordinates, undoing the zoom/pan
 // transform that main.js applies to #viewport.
@@ -61,6 +77,32 @@ function onDeleteBubble(clientX, clientY) {
     return document.elementFromPoint(clientX, clientY).closest(".node-delete-bubble") != null;
 }
 
+// Move a node to follow the finger. Coordinates pass through the zoom/pan
+// transform (graphPoint), and the same MIN_DISTANCE spacing rule as the
+// desktop drag applies so nodes can't be stacked on top of each other. A
+// rejected position flashes the node red, exactly like the desktop drag.
+function moveNodeTo(node, clientX, clientY) {
+    if (locked) return;
+    const [x, y] = graphPoint(clientX, clientY);
+    const tooClose = graph.nodes.some(n => {
+        if (n.id === node.id) return false;
+        const dx = n.x - x;
+        const dy = n.y - y;
+        return Math.sqrt(dx*dx + dy*dy) < MIN_DISTANCE;
+    });
+    const circle = nodesLayer.selectAll(".node")
+        .filter(n => n.id === node.id)
+        .select("circle");
+    if (tooClose) {
+        circle.attr("fill", "#ef4444");
+        return;
+    }
+    circle.attr("fill", "#3b82f6");
+    node.x = x;
+    node.y = y;
+    queueRender();
+}
+
 function applyActions(actions) {
     actions.forEach(a => {
         switch (a.action) {
@@ -69,16 +111,23 @@ function applyActions(actions) {
                 nodesLayer.selectAll(".node")
                     .filter(d => d.id === a.nodeId)
                     .classed("node-selected", true);
+                setConnectHint(a.nodeId);
                 break;
 
             case "connect":
                 pendingEdge = { source: a.source, target: a.target };
+                // The machine is back in IDLE — drop the selection ring so it
+                // doesn't linger on the source node while the weight modal is
+                // open (or after the edge exists).
+                nodesLayer.selectAll(".node").classed("node-selected", false);
+                setConnectHint(null);
                 stopAnimation();
                 showWeightModal();
                 break;
 
             case "clearSelection":
                 nodesLayer.selectAll(".node").classed("node-selected", false);
+                setConnectHint(null);
                 break;
 
             case "showDeleteConfirm":
@@ -93,6 +142,7 @@ function applyActions(actions) {
             case "deleteNode":
                 graph.nodes = graph.nodes.filter(n => n.id !== a.nodeId);
                 graph.edges = graph.edges.filter(e => e.source !== a.nodeId && e.target !== a.nodeId);
+                setConnectHint(null);
                 stopAnimation();
                 render();
                 break;
@@ -119,12 +169,18 @@ function clearLongPressTimer() {
 }
 
 // ── Touch listeners on the canvas ──
+// touchstart is NON-passive so we can preventDefault: canceling the start of a
+// touch suppresses the browser's native long-press (context menu + haptic,
+// which on Android also fires touchcancel and kills our 600 ms timer) and the
+// synthesized mouse/click events. Empty-canvas taps deliberately stay
+// unprevented so the follow-up click still adds a node (desktop parity).
 container.addEventListener("touchstart", (e) => {
     // Two or more fingers means a pinch-zoom (handled by d3.zoom) — don't
     // start tap/long-press state for multi-touch gestures, and drop any
     // long-press timer the first finger may already have started.
     if (e.touches.length > 1) {
         touchActive = false;
+        draggingNode = null;
         clearLongPressTimer();
         return;
     }
@@ -133,6 +189,9 @@ container.addEventListener("touchstart", (e) => {
     // While a delete confirmation is open, a tap on the bubble confirms it;
     // a tap anywhere else dismisses it (and does nothing else this touch).
     if (machine.getState() === "DELETE_PENDING") {
+        // Never let a synthetic click escape: on the bubble it would confirm
+        // twice, elsewhere it would drop a stray node while dismissing.
+        e.preventDefault();
         if (onDeleteBubble(t.clientX, t.clientY)) {
             deleteBubble.dispatchEvent(new TouchEvent("touchend", {
                 bubbles: true, cancelable: true,
@@ -146,18 +205,29 @@ container.addEventListener("touchstart", (e) => {
 
     touchActive = true;
     tapCanceled = false;
+    draggingNode = null;
     touchStartX = t.clientX;
     touchStartY = t.clientY;
     longPressNode = nodeAtPoint(t.clientX, t.clientY);
 
     if (longPressNode) {
+        // Holding a node is our long-press — cancel the native one so the
+        // browser doesn't vibrate / open a menu / cancel the touch, and so no
+        // synthetic click adds a duplicate node afterwards.
+        e.preventDefault();
         longPressTimer = setTimeout(() => {
             longPressTimer = null;
             tapCanceled = true;
             applyActions(machine.handle({ type: "longPress", nodeId: longPressNode.id }));
         }, LONG_PRESS_MS);
     }
-}, { passive: true });
+}, { passive: false });
+
+// Long-press on Android otherwise opens the browser's own context menu even
+// when touch-action already says the browser shouldn't handle the gesture.
+container.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+});
 
 container.addEventListener("touchmove", (e) => {
     if (!touchActive) return;
@@ -170,14 +240,33 @@ container.addEventListener("touchmove", (e) => {
         tapCanceled = true;
         clearLongPressTimer();
     }
-    // Beyond the tap slop the touch is a drag/scroll, not a tap.
-    if (moved > TAP_SLOP) tapCanceled = true;
+    // Beyond the tap slop the touch is a drag, not a tap. If it started on a
+    // node the finger drags that node around (same as mouse drag on desktop);
+    // empty-canvas drags do nothing (panning is a two-finger pinch).
+    if (moved > TAP_SLOP) {
+        tapCanceled = true;
+        clearLongPressTimer();
+        if (!draggingNode && longPressNode) draggingNode = longPressNode;
+    }
+    if (draggingNode) {
+        moveNodeTo(draggingNode, t.clientX, t.clientY);
+    }
 }, { passive: true });
 
 container.addEventListener("touchend", (e) => {
     if (!touchActive) return;
     touchActive = false;
     clearLongPressTimer();
+    // A drag is finished — it never falls through to a tap/selection. Restore
+    // the normal fill in case the drag ended on a rejected (red) position.
+    if (draggingNode) {
+        nodesLayer.selectAll(".node")
+            .filter(n => n.id === draggingNode.id)
+            .select("circle")
+            .attr("fill", "#3b82f6");
+        draggingNode = null;
+        return;
+    }
     if (tapCanceled) return;
 
     const t = e.changedTouches[0];
@@ -195,6 +284,7 @@ container.addEventListener("touchend", (e) => {
 
 container.addEventListener("touchcancel", () => {
     touchActive = false;
+    draggingNode = null;
     clearLongPressTimer();
 }, { passive: true });
 
@@ -228,10 +318,12 @@ document.getElementById("clear-btn").addEventListener("click", (e) => {
 });
 
 // ── Mobile touch hints in the status bar ──
+// Kept short so it fits next to NODES/EDGES on a phone; the full instructions
+// live in the help modal ("?" button).
 if (isTouchDevice()) {
     document.body.classList.add("touch");
     const hint = document.querySelector("#statusbar .status-item:last-child");
     if (hint) {
-        hint.textContent = "TAP node A → TAP node B: edge · HOLD node: delete · TAP empty: add node · PINCH (2 fingers): zoom & pan";
+        hint.textContent = "TAP A → TAP B: edge · HOLD node: delete · TAP space: add node";
     }
 }

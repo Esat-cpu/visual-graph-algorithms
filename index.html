@@ -49,8 +49,11 @@
 
         <button id="run-btn" title="Run algorithm / stop animation">▶ RUN</button>
 
-        <button id="export-btn" title="Save the current graph to a file">⬇ EXPORT</button>
-        <button id="import-btn" title="Load a graph from a file">⬆ IMPORT</button>
+        <!-- Export/Import stay on the same row even when the top bar wraps -->
+        <div class="btn-group" id="io-group">
+            <button id="export-btn" title="Save the current graph to a file">⬇ EXPORT</button>
+            <button id="import-btn" title="Load a graph from a file">⬆ IMPORT</button>
+        </div>
 
         <button id="help-btn" title="How to use the visualizer">?</button>
 
@@ -72,6 +75,9 @@
         <div id="graph-container">
             <button id="clear-graph-btn" title="Clear graph">✕ CLEAR</button>
 
+            <!-- Touch-only pill explaining the tap-to-connect state -->
+            <div id="node-connect-hint" class="hidden" aria-live="polite"></div>
+
             <!-- Colour legend for algorithm highlights -->
             <div id="legend" aria-hidden="true">
                 <span class="legend-item"><i class="swatch" style="background:#3b82f6"></i>NODE</span>
@@ -86,7 +92,17 @@
                     <marker id="arrowhead" markerWidth="16" markerHeight="12" refX="14" refY="6" orient="auto" markerUnits="userSpaceOnUse">
                         <polygon points="0 0, 14 6, 0 12" fill="#666666" />
                     </marker>
+                    <!-- Grid cells: right+bottom edge of each 32px tile, so the
+                         whole grid is one tiling pattern. The fill rect lives in
+                         #grid-layer, which gets the same zoom/pan transform as
+                         #viewport — so the grid scales and slides with the nodes. -->
+                    <pattern id="grid-pattern" width="32" height="32" patternUnits="userSpaceOnUse">
+                        <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#1a1a1a" stroke-width="1"></path>
+                    </pattern>
                 </defs>
+                <g id="grid-layer">
+                    <rect id="grid-fill" fill="url(#grid-pattern)"></rect>
+                </g>
                 <!-- Zoom/pan transform is applied to this group so node and
                      edge coordinates stay in graph space. -->
                 <g id="viewport">
@@ -114,7 +130,7 @@
     <div id="statusbar">
         <span class="status-item">NODES <b id="stat-nodes">0</b></span>
         <span class="status-item">EDGES <b id="stat-edges">0</b></span>
-        <span class="status-item">LEFT CLICK — add node &nbsp;·&nbsp; RIGHT DRAG — add/remove edge &nbsp;·&nbsp; RIGHT CLICK node — remove &nbsp;·&nbsp; WHEEL — zoom</span>
+        <span class="status-item">LEFT CLICK — add node &nbsp;·&nbsp; LEFT DRAG node — move &nbsp;·&nbsp; RIGHT DRAG — edge / pan &nbsp;·&nbsp; RIGHT CLICK node — remove &nbsp;·&nbsp; WHEEL — zoom</span>
     </div>
 
     <!-- HIDDEN FILE INPUT for import -->

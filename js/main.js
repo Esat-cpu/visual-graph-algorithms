@@ -13,17 +13,30 @@ const svg = d3.select("#graph-svg");
 const viewport = svg.select("#viewport");
 const edgesLayer = viewport.select("#edges-layer");
 const nodesLayer = viewport.select("#nodes-layer");
+// The grid is an SVG layer, not a CSS background, so it shares the zoom/pan
+// transform with the nodes and stays aligned with them at any scale.
+const gridLayer = svg.select("#grid-layer");
+const gridRect = gridLayer.select("#grid-fill");
 
 let locked = false;
 let dragSource = null;
+// What the current mouse gesture on a node is doing: "move" (left button
+// repositions the node) or "edge" (right button draws a candidate edge).
+let dragMode = null;
 let pendingEdge = null;
 let dragStartX = 0;
 let dragStartY = 0;
 let currentParents = null;
 let renderHandle = null;
-// Set when the user pans with the mouse so the synthetic click after the drag
-// doesn't drop a new node onto the canvas.
-let panJustMoved = false;
+// Set while a mouse drag is underway so the synthetic click that follows the
+// button release doesn't drop a new node onto the canvas. Cleared on the next
+// left mousedown, so a drag never leaves a stale "suppress" behind.
+let suppressClick = false;
+// Where the left button went down (for telling a drag from a click, since the
+// left button no longer pans — panning moved to the right button).
+let leftDownX = 0;
+let leftDownY = 0;
+let leftDown = false;
 
 // Shared animation engine: all four algorithms feed their precomputed `steps`
 // into this one playback object, so speed changes, stop, seek and reverse all
@@ -43,6 +56,10 @@ const isTouch = (window.matchMedia && window.matchMedia("(pointer: coarse)").mat
 const NODE_SIZE = isTouch ? 30 : 24;
 const MIN_DISTANCE = isTouch ? 90 : 75;
 const EDGE_OFFSET = 10;
+// Mouse movement needed before a press counts as a drag instead of a click.
+// Generous enough that fast clicking (with a few px of hand jitter) still
+// adds nodes, while a real drag still suppresses the trailing click.
+const CLICK_SLOP = 10;
 
 
 
@@ -410,6 +427,11 @@ function render() {
             return g;
         });
 
+    // Selection is a transient touch state, never part of the graph. Clearing
+    // it on every render prevents a stale highlight ring from surviving a
+    // re-render (import, mode switch, connect, clear, ...).
+    nodeGroups.classed("node-selected", false);
+
     nodeGroups.attr("transform", n => `translate(${n.x}, ${n.y})`);
     nodeGroups.select("circle")
         .attr("fill", "#3b82f6")
@@ -417,11 +439,12 @@ function render() {
         .attr("stroke-width", 2);
     nodeGroups.select("text").text(n => n.id);
 
-    nodeGroups.call(drag);
-
-    // Right drag — add edge
+    // Node mouse gestures: LEFT-drag moves the node, RIGHT-drag draws a
+    // candidate edge (release on another node adds/removes it, a short
+    // right-click removes the node). Touch devices use mobile.js instead.
     nodeGroups.on("mousedown", function(event) {
-        if (event.button !== 2) return;
+        if (event.button !== 0 && event.button !== 2) return;
+        if (locked) return;
 
         event.preventDefault();
         dragStartX = event.clientX;
@@ -429,11 +452,14 @@ function render() {
 
         const d = d3.select(this).datum();
         dragSource = d;
+        dragMode = event.button === 0 ? "move" : "edge";
 
-        dragLine
-            .attr("x1", d.x).attr("y1", d.y)
-            .attr("x2", d.x).attr("y2", d.y)
-            .attr("opacity", 1);
+        if (dragMode === "edge") {
+            dragLine
+                .attr("x1", d.x).attr("y1", d.y)
+                .attr("x2", d.x).attr("y2", d.y)
+                .attr("opacity", 1);
+        }
     });
 
 
@@ -468,24 +494,49 @@ const zoom = d3.zoom()
         if (event.type === "dblclick") return false;
         // Touch: only start a gesture for a two-finger pinch.
         if (event.type === "touchstart") return event.touches.length === 2;
-        // Mouse: pan on empty canvas, but never steal a node drag (and only
-        // the left button pans).
-        return !event.button && !event.target.closest(".node");
+        // Mouse: the RIGHT button pans the empty canvas; the left button is
+        // reserved for adding nodes and dragging them.
+        return event.button === 2 && !event.target.closest(".node");
     })
-    .on("start", function() { panJustMoved = false; })
     .on("zoom", function(event) {
         viewport.attr("transform", event.transform);
+        gridLayer.attr("transform", event.transform);
+        updateGridRect();
         // Only an actual mouse-drag pan produces a follow-up click; wheel zoom
         // and touch pinch (sourceEvent "wheel"/"touchmove") never do.
-        panJustMoved = panJustMoved || (event.sourceEvent && event.sourceEvent.type === "mousemove");
+        if (event.sourceEvent && event.sourceEvent.type === "mousemove") suppressClick = true;
     });
 svg.call(zoom);
 
+// Size the grid fill so it always covers the visible graph area, whatever the
+// current zoom/pan. (At small scales the view spans far more graph units than
+// the container's pixel size, so a fixed-size rect would leave gaps.)
+function updateGridRect() {
+    const t = d3.zoomTransform(svg.node());
+    const box = document.getElementById("graph-container");
+    const w = box.clientWidth;
+    const h = box.clientHeight;
+    const a = t.invert([0, 0]);
+    const b = t.invert([w, h]);
+    const margin = 400;   // breathing room so the grid never pops at the edge
+    gridRect
+        .attr("x", a[0] - margin)
+        .attr("y", a[1] - margin)
+        .attr("width", (b[0] - a[0]) + margin * 2)
+        .attr("height", (b[1] - a[1]) + margin * 2);
+}
+window.addEventListener("resize", updateGridRect);
+updateGridRect();
 
-// ── NODE DRAG ──
-// Full renders are deferred to the next animation frame, so several mousemove
-// events that fall into the same frame coalesce into one update. Structural
-// changes (node/edge add, remove, mode switch) still render synchronously.
+
+// ── NODE DRAG (desktop mouse) ──
+// Two node gestures share the mousedown → mousemove → mouseup pipeline:
+//   LEFT button  — move the node ("move" mode),
+//   RIGHT button — candidate edge to another node / remove node ("edge" mode).
+// No d3.drag: its touch handlers swallow the pointer events mobile.js needs,
+// and a custom handler is easily testable. Renders are deferred to the next
+// animation frame so several mousemove events coalesce into one update;
+// structural changes (node/edge add, remove, mode switch) render synchronously.
 function queueRender() {
     if (renderHandle != null) return;
     renderHandle = requestAnimationFrame(() => {
@@ -494,41 +545,82 @@ function queueRender() {
     });
 }
 
-const drag = d3.drag()
-    .on("start", function() {})
-    .on("drag", function(event, d) {
-        if (locked) return;
-        const tooClose = graph.nodes.some(n => {
-            if (n.id === d.id) return false;
-            const dx = n.x - event.x;
-            const dy = n.y - event.y;
-            return Math.sqrt(dx*dx + dy*dy) < MIN_DISTANCE;
-        });
-        if (tooClose) {
-            // Drop the pending re-render so it cannot repaint the node blue
-            if (renderHandle != null) { cancelAnimationFrame(renderHandle); renderHandle = null; }
-            d3.select(this).select("circle").attr("fill", "#ef4444");
-            return;
-        }
-        d3.select(this).select("circle").attr("fill", "#3b82f6");
-        d.x = event.x;
-        d.y = event.y;
-        queueRender();
-    })
-    .on("end", function() {
-        d3.select(this).select("circle").attr("fill", "#3b82f6");
+// Returns true when `x,y` is too close to a node other than `node`.
+function isTooCloseTo(x, y, node) {
+    return graph.nodes.some(n => {
+        if (n.id === node.id) return false;
+        const dx = n.x - x;
+        const dy = n.y - y;
+        return Math.sqrt(dx*dx + dy*dy) < MIN_DISTANCE;
     });
+}
 
+// Selection of the rendered node group for a graph node (used to flash its
+// circle red while a drag position is rejected).
+function nodeEl(node) {
+    return nodesLayer.selectAll(".node").filter(n => n.id === node.id);
+}
 
 d3.select("#graph-container")
+    // The left button no longer pans, so a left-drag on the canvas must still
+    // be told apart from a plain click: remember where it went down and flag
+    // any movement so the click handler can skip the node-add.
+    .on("mousedown", function(event) {
+        if (event.button !== 0) return;
+        leftDown = true;
+        suppressClick = false;
+        leftDownX = event.clientX;
+        leftDownY = event.clientY;
+    })
     .on("mousemove", function(event) {
-        if (!dragSource) return;
+        if (leftDown) {
+            const dx = event.clientX - leftDownX;
+            const dy = event.clientY - leftDownY;
+            if (dx*dx + dy*dy > CLICK_SLOP * CLICK_SLOP) suppressClick = true;
+        }
+        if (!dragSource || !dragMode) return;
+        if (locked) return;
         const [x, y] = d3.pointer(event, viewport.node());
-        dragLine.attr("x2", x).attr("y2", y);
+        if (dragMode === "move") {
+            // Left-drag repositions the source node (zoom/pan coords included);
+            // the spacing rule keeps nodes from piling up and flashes the node
+            // red while the position is being rejected.
+            if (isTooCloseTo(x, y, dragSource)) {
+                nodeEl(dragSource).select("circle").attr("fill", "#ef4444");
+                // Drop the pending re-render so it cannot repaint the node blue.
+                if (renderHandle != null) { cancelAnimationFrame(renderHandle); renderHandle = null; }
+            } else {
+                nodeEl(dragSource).select("circle").attr("fill", "#3b82f6");
+                dragSource.x = x;
+                dragSource.y = y;
+                queueRender();
+            }
+        } else {
+            // Right-drag only previews the candidate edge.
+            dragLine
+                .attr("x1", dragSource.x).attr("y1", dragSource.y)
+                .attr("x2", x).attr("y2", y);
+        }
     })
     .on("mouseup", function(event) {
+        if (event.button === 0) leftDown = false;
         if (!dragSource) return;
+        const d = dragSource;
+        const mode = dragMode;
+        dragLine.attr("opacity", 0);
+        dragSource = null;
+        dragMode = null;
+        // During playback the graph is locked; never mutate it mid-run, but do
+        // release the drag state above so nothing sticks.
         if (locked) return;
+
+        if (mode === "move") {
+            // A left-drag move is done — the click suppression above keeps the
+            // trailing click from planting a new node. Restore the normal fill
+            // in case the drag ended on a rejected (red) position.
+            nodeEl(d).select("circle").attr("fill", "#3b82f6");
+            return;
+        }
 
         const [x, y] = d3.pointer(event, viewport.node());
         const dx = event.clientX - dragStartX;
@@ -538,46 +630,44 @@ d3.select("#graph-container")
         const targetNode = graph.nodes.find(n => {
             const nx = n.x - x;
             const ny = n.y - y;
-            return Math.sqrt(nx*nx + ny*ny) < (NODE_SIZE + 10) && n.id !== dragSource.id;
+            return Math.sqrt(nx*nx + ny*ny) < (NODE_SIZE + 10) && n.id !== d.id;
         });
 
         if (targetNode) {
             // Edge add/remove. Dragging an existing edge removes it; dragging
             // a missing one opens the weight prompt to create it.
-            if (graph.hasEdge(dragSource.id, targetNode.id)) {
+            if (graph.hasEdge(d.id, targetNode.id)) {
                 // Directed: only the dragged direction is removed, so a
                 // bidirectional pair can keep the opposite edge.
                 graph.edges = graph.edges.filter(e => {
                     if (graph.directed)
-                        return !(e.source === dragSource.id && e.target === targetNode.id);
-                    return !(e.source === dragSource.id && e.target === targetNode.id) &&
-                           !(e.source === targetNode.id && e.target === dragSource.id);
+                        return !(e.source === d.id && e.target === targetNode.id);
+                    return !(e.source === d.id && e.target === targetNode.id) &&
+                           !(e.source === targetNode.id && e.target === d.id);
                 });
                 stopAnimation();
                 render();
             } else {
-                pendingEdge = { source: dragSource.id, target: targetNode.id };
+                pendingEdge = { source: d.id, target: targetNode.id };
                 showWeightModal();
                 stopAnimation();
             }
         } else if (dist < 5) {
             // No drag — remove node
-            graph.nodes = graph.nodes.filter(n => n.id !== dragSource.id);
-            graph.edges = graph.edges.filter(e => e.source !== dragSource.id && e.target !== dragSource.id);
+            graph.nodes = graph.nodes.filter(n => n.id !== d.id);
+            graph.edges = graph.edges.filter(e => e.source !== d.id && e.target !== d.id);
             stopAnimation();
             render();
         }
-
-        dragLine.attr("opacity", 0);
-        dragSource = null;
     });
 
 
 // ── LEFT CLICK — ADD NODE ──
 d3.select("#graph-container").on("click", function(event) {
     if (locked) return;
-    // A mouse-pan also ends with a click; don't drop a node after panning.
-    if (panJustMoved) { panJustMoved = false; return; }
+    // A mouse drag also ends with a click; don't drop a node after dragging.
+    // The flag is cleared on the next left mousedown (see above).
+    if (suppressClick) return;
     if (event.target.closest(".node")) return;
     if (event.target.closest("#clear-graph-btn")) return;
     const [x, y] = d3.pointer(event, viewport.node());
@@ -791,19 +881,18 @@ function showHelp() {
         <div>HOLD a node &nbsp;—&nbsp; delete it</div>
         <div class="help-sec">VIEW</div>
         <div>PINCH two fingers &nbsp;—&nbsp; zoom / pan</div>
-        <div>Drag node &nbsp;—&nbsp; move it</div>
         <div class="help-sec">RUN</div>
         <div>Pick algorithm, set START, press <kbd>RUN</kbd>. Adjust speed live, use
         REV + scrubber to rewind.</div>
     ` : `
         <div class="help-sec">GRAPH</div>
         <div><kbd>LEFT CLICK</kbd> empty canvas &nbsp;—&nbsp; add node</div>
+        <div><kbd>LEFT DRAG</kbd> node &nbsp;—&nbsp; move it</div>
         <div><kbd>RIGHT DRAG</kbd> node → node &nbsp;—&nbsp; add edge</div>
         <div><kbd>RIGHT DRAG</kbd> connected nodes &nbsp;—&nbsp; remove edge</div>
-        <div><kbd>LEFT CLICK</kbd> node without moving &nbsp;—&nbsp; remove it</div>
+        <div><kbd>RIGHT CLICK</kbd> node without moving &nbsp;—&nbsp; remove it</div>
         <div class="help-sec">VIEW</div>
-        <div><kbd>WHEEL</kbd> &nbsp;—&nbsp; zoom · drag empty space &nbsp;—&nbsp; pan</div>
-        <div>Drag node &nbsp;—&nbsp; move it</div>
+        <div><kbd>WHEEL</kbd> &nbsp;—&nbsp; zoom · <kbd>RIGHT DRAG</kbd> empty space &nbsp;—&nbsp; pan</div>
         <div class="help-sec">RUN</div>
         <div>Pick algorithm, set START, press <kbd>RUN</kbd>. Adjust speed live, use
         REV + scrubber to rewind.</div>
@@ -1203,6 +1292,11 @@ if (typeof window !== "undefined") {
         get graph() { return graph; },
         get activeAlgo() { return activeAlgo; },
         get playback() { return playback; },
+        get locked() { return locked; },
+        // mobile.js reads these as bare globals (its own <script> scope). The
+        // jsdom tests eval each file in its own scope, so the shared refs are
+        // re-exposed here for the test harness to rebind.
+        svg, nodesLayer, NODE_SIZE, MIN_DISTANCE, render, queueRender, stopAnimation,
         get locked() { return locked; }
     };
 }
