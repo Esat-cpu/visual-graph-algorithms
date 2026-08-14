@@ -1,0 +1,39 @@
+{
+  "format": "vga",
+  "version": 1,
+  "directed": false,
+  "nodeIdCounter": 12,
+  "nodes": [
+    { "id": 0, "x": 120, "y": 80 },
+    { "id": 1, "x": 320, "y": 60 },
+    { "id": 2, "x": 520, "y": 90 },
+    { "id": 3, "x": 700, "y": 140 },
+    { "id": 4, "x": 840, "y": 300 },
+    { "id": 5, "x": 700, "y": 460 },
+    { "id": 6, "x": 500, "y": 520 },
+    { "id": 7, "x": 300, "y": 500 },
+    { "id": 8, "x": 100, "y": 440 },
+    { "id": 9, "x": 100, "y": 260 },
+    { "id": 10, "x": 300, "y": 280 },
+    { "id": 11, "x": 560, "y": 300 }
+  ],
+  "edges": [
+    { "source": 0, "target": 1, "weight": 4 },
+    { "source": 1, "target": 2, "weight": 3 },
+    { "source": 2, "target": 3, "weight": 5 },
+    { "source": 3, "target": 4, "weight": 2 },
+    { "source": 4, "target": 5, "weight": 6 },
+    { "source": 5, "target": 6, "weight": 4 },
+    { "source": 6, "target": 7, "weight": 3 },
+    { "source": 7, "target": 8, "weight": 5 },
+    { "source": 8, "target": 9, "weight": 2 },
+    { "source": 9, "target": 0, "weight": 7 },
+    { "source": 1, "target": 10, "weight": 6 },
+    { "source": 10, "target": 9, "weight": 4 },
+    { "source": 2, "target": 11, "weight": 3 },
+    { "source": 11, "target": 10, "weight": 8 },
+    { "source": 3, "target": 11, "weight": 7 },
+    { "source": 11, "target": 6, "weight": 5 },
+    { "source": 4, "target": 11, "weight": 9 }
+  ]
+}

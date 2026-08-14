@@ -84,6 +84,11 @@ Editing the graph, switching algorithm or mode, or clearing hides the playback b
 
 Files use the `vga` format: `{ format, version, directed, nodeIdCounter, nodes, edges }`.
 
+Ready-made example graphs live in [`graph-examples/`](graph-examples/) — two undirected and two directed, all connected so every algorithm runs on them. Import one with the **⬆ IMPORT** button to try the algorithms without building a graph first:
+
+- `graph-undirected-1.json` (12 nodes) · `graph-undirected-2.json` (7 nodes)
+- `graph-directed-1.json` (10 nodes) · `graph-directed-2.json` (5 nodes)
+
 ## Running Locally
 
 ```bash
