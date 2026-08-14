@@ -13,6 +13,16 @@ An interactive graph algorithm visualizer built with Vanilla JS and D3.js.
 | **Prim** | Minimum Spanning Tree | Builds an MST by greedily adding the cheapest edge from the visited set |
 | **Kruskal** | Minimum Spanning Tree | Builds an MST by sorting all edges and adding them without creating cycles |
 
+## Screenshots
+
+| Desktop — Dijkstra | Desktop — Prim |
+|---|---|
+| ![Dijkstra example](screenshots/dijkstra_example.png) | ![Prim example](screenshots/prim_example.png) |
+
+| Mobile |
+|---|
+| <img src="screenshots/mobil.jpeg" alt="Mobile view" width="260"> |
+
 ## Building a Graph
 
 - **Left click** on the canvas to add a node
@@ -25,7 +35,7 @@ An interactive graph algorithm visualizer built with Vanilla JS and D3.js.
 ### Zoom & Pan
 
 - **Mouse wheel** zooms in/out around the cursor.
-- **Drag empty canvas space** pans the view (works on desktop with the mouse).
+- **Right-drag empty canvas space** pans the view (desktop mouse).
 - **Pinch two fingers** zooms and pans on touch screens.
 - Nodes and edges always stay on screen — zooming only changes the view, not the graph.
 
