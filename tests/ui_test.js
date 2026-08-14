@@ -621,6 +621,45 @@ function test_touch_tap_to_connect_and_hint() {
     console.log("UI Test 12 (touch tap-to-connect + hint) Succesful!");
 }
 
+function test_no_duplicate_edge_on_reverse_tap() {
+    const { doc, win, app } = buildApp();
+
+    // Undirected workspace: node 0 ↔ node 1. Create the edge, then simulate a
+    // reverse tap (node 1 → node 0) which re-opens the weight modal.
+    clickCanvas(win, doc, 100, 100);
+    clickCanvas(win, doc, 250, 100);
+    app.graph.addEdge(0, 1, 5);
+    assert(app.graph.edges.length === 1, "one edge exists");
+
+    const confirmBtn = doc.getElementById("weight-confirm");
+    const removeBtn = doc.getElementById("weight-remove");
+
+    // Reverse-direction tap: undirected hasEdge matches both orientations, so
+    // the modal must offer REMOVE EDGE and lock CONFIRM.
+    app.pendingEdge = { source: 1, target: 0 };
+    app.showWeightModal();
+    assert(removeBtn.hidden === false, "REMOVE EDGE shown for an existing edge");
+    assert(confirmBtn.disabled === true, "CONFIRM disabled so no duplicate is added");
+
+    // CONFIRM is a no-op on an existing edge even if invoked directly.
+    confirmBtn.click();
+    assert(app.graph.edges.length === 1, "no duplicate edge after clicking CONFIRM");
+
+    // REMOVE EDGE drops the pair in undirected mode.
+    removeBtn.click();
+    assert(app.graph.edges.length === 0, "REMOVE EDGE deletes the edge");
+
+    // A fresh (non-existing) edge keeps CONFIRM enabled and hides REMOVE EDGE.
+    app.pendingEdge = { source: 1, target: 0 };
+    app.showWeightModal();
+    assert(removeBtn.hidden === true, "REMOVE EDGE hidden for a new edge");
+    assert(confirmBtn.disabled === false, "CONFIRM enabled for a new edge");
+    doc.getElementById("weight-cancel").click();
+
+    win.close();
+    console.log("UI Test 17 (no duplicate edge on reverse tap) Succesful!");
+}
+
 function test_touch_long_press_delete() {
     const { doc, win, app, timers } = buildApp();
     loadMobile(win);
@@ -805,6 +844,7 @@ test_help_modal_opens_and_closes();
 test_pan_does_not_add_node();
 test_mobile_script_loads_after_main();
 test_touch_tap_to_connect_and_hint();
+test_no_duplicate_edge_on_reverse_tap();
 test_touch_long_press_delete();
 test_touch_node_drag();
 test_desktop_drag_buttons();

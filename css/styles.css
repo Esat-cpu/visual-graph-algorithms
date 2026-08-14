@@ -720,6 +720,10 @@ body {
 
 #weight-confirm { background: var(--accent); color: #fff; }
 #weight-confirm:hover { background: var(--accent-dim); }
+/* CONFIRM is disabled while the pending edge already exists (only REMOVE
+   EDGE makes sense then) — visually de-emphasize it. */
+#weight-confirm:disabled { background: var(--bg-surface); color: var(--text-muted); cursor: not-allowed; }
+#weight-confirm:disabled:hover { background: var(--bg-surface); }
 #weight-cancel { background: var(--bg-surface); color: var(--text-muted); border: 1px solid var(--border); }
 #weight-cancel:hover { color: var(--text-primary); }
 

@@ -699,10 +699,14 @@ function showWeightModal() {
 
     // When the pending edge already exists, offer REMOVE EDGE instead of
     // creating a duplicate (tap-tap on mobile re-opens the modal for it).
+    // In that case CONFIRM is disabled so a weight can never sneak in a
+    // second copy of the same edge — undirected graphs especially would
+    // otherwise show two parallel edges with two overlapping labels.
     if (removeBtn) {
         const exists = pendingEdge &&
             graph.hasEdge(pendingEdge.source, pendingEdge.target);
         removeBtn.hidden = !exists;
+        document.getElementById("weight-confirm").disabled = exists;
     }
 }
 
@@ -712,6 +716,9 @@ function hideWeightModal() {
 }
 
 document.getElementById("weight-confirm").addEventListener("click", () => {
+    if (!pendingEdge) return;
+    // Belt and braces: never add a duplicate of an existing edge.
+    if (graph.hasEdge(pendingEdge.source, pendingEdge.target)) return;
     // Any numeric weight is allowed (including negative and zero) — Dijkstra
     // and Bellman-Ford demonstrate their behavior with them, and Prim/Kruskal
     // are unaffected by the sign.
@@ -1297,7 +1304,9 @@ if (typeof window !== "undefined") {
         // jsdom tests eval each file in its own scope, so the shared refs are
         // re-exposed here for the test harness to rebind.
         svg, nodesLayer, NODE_SIZE, MIN_DISTANCE, render, queueRender, stopAnimation,
-        get locked() { return locked; }
+        get pendingEdge() { return pendingEdge; },
+        set pendingEdge(v) { pendingEdge = v; },
+        showWeightModal, hideWeightModal
     };
 }
 
